@@ -1,0 +1,40 @@
+# Ignore build artifacts and CMake files
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+/Makefile*
+compile_commands.json
+
+# Object files and static/shared libs
+*.o
+*.obj
+*.so
+*.a
+*.dll
+
+# Executables
+sfml-app
+*.exe
+
+# IDEs and editors
+.vscode/
+.idea/
+.vs/
+*.suo
+*.user
+*.user.*
+*.swp
+*~
+
+# macOS
+.DS_Store
+
+# Logs and temporary
+*.log
+.cache/
+
+# Tags, cscope
+tags
+cscope.*
