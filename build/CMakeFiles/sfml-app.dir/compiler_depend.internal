@@ -771,7 +771,6 @@ CMakeFiles/sfml-app.dir/main.cpp.o
  /usr/include/c++/15/iomanip
  /usr/include/c++/15/ios
  /usr/include/c++/15/iosfwd
- /usr/include/c++/15/iostream
  /usr/include/c++/15/istream
  /usr/include/c++/15/iterator
  /usr/include/c++/15/limits
@@ -947,5 +946,6 @@ sfml-app
  /usr/lib/x86_64-linux-gnu/libsfml-system.so.3.0.2
  /usr/lib/x86_64-linux-gnu/libsfml-window.so.3.0.2
  /home/kali/proyectofinal/build/CMakeFiles/sfml-app.dir/KDTree.cpp.o
+ /home/kali/proyectofinal/build/CMakeFiles/sfml-app.dir/Visualizer.cpp.o
  /home/kali/proyectofinal/build/CMakeFiles/sfml-app.dir/main.cpp.o
 

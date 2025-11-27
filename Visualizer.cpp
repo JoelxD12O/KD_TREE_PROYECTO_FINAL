@@ -17,6 +17,13 @@ const float PLANE_ORIGIN_Y = 0.f;
 // Rango máximo de coordenadas reales (como el ejemplo del libro)
 const float MAX_COORD = 128.f;
 
+// Panel derecho: árbol
+const float TREE_ORIGIN_X   = PLANE_WIDTH;           // empieza donde acaba el plano
+const float TREE_PADDING_X  = 20.f;
+const float TREE_PADDING_Y  = 40.f;
+const float TREE_WIDTH      = WINDOW_WIDTH - TREE_ORIGIN_X - TREE_PADDING_X;
+const float TREE_LEVEL_H    = 80.f;                  // separación vertical entre niveles
+
 // Region struct used by KD drawing
 struct Region {
     float minX, maxX;
@@ -151,6 +158,78 @@ static void drawKDLines(sf::RenderWindow& window, KDNode* root) {
     drawKDLinesRec(window, root, initialRegion);
 }
 
+// -------------------- Draw tree (panel derecho) --------------------
+static void drawTreeRec(sf::RenderWindow& window,
+                        KDNode* nodo,
+                        float xMin, float xMax,
+                        float yActual,
+                        const sf::Font* font) {
+    if (!nodo) return;
+
+    float xCentro = xMin + (xMax - xMin) / 2.f;
+    sf::Vector2f posNodo(xCentro, TREE_PADDING_Y + yActual);
+
+    float yHijo = yActual + TREE_LEVEL_H;
+    float xMid = xMin + (xMax - xMin) / 2.f;
+
+    // hijo izquierdo
+    if (nodo->izquierdo) {
+        float xHijoIzq = xMin + (xMid - xMin) / 2.f;
+        sf::Vector2f posHijoIzq(xHijoIzq, TREE_PADDING_Y + yHijo);
+
+        sf::VertexArray linea(sf::PrimitiveType::Lines, 2);
+        linea[0].position = posNodo;
+        linea[1].position = posHijoIzq;
+        linea[0].color = linea[1].color = sf::Color::White;
+        window.draw(linea);
+
+        drawTreeRec(window, nodo->izquierdo, xMin, xMid, yHijo, font);
+    }
+
+    // hijo derecho
+    if (nodo->derecho) {
+        float xHijoDer = xMid + (xMax - xMid) / 2.f;
+        sf::Vector2f posHijoDer(xHijoDer, TREE_PADDING_Y + yHijo);
+
+        sf::VertexArray linea(sf::PrimitiveType::Lines, 2);
+        linea[0].position = posNodo;
+        linea[1].position = posHijoDer;
+        linea[0].color = linea[1].color = sf::Color::White;
+        window.draw(linea);
+
+        drawTreeRec(window, nodo->derecho, xMid, xMax, yHijo, font);
+    }
+
+    // dibujar nodo
+    float radio = 14.f;
+    sf::CircleShape circle(radio);
+    circle.setFillColor(sf::Color(50, 120, 255));
+    circle.setOrigin(sf::Vector2f(radio, radio));
+    circle.setPosition(posNodo);
+    window.draw(circle);
+
+    // label opcional con coordenadas
+    if (font) {
+        std::string label = "(" + std::to_string((int)nodo->punto.x) + ", " + std::to_string((int)nodo->punto.y) + ")";
+        sf::Text text(*font, label);
+        text.setCharacterSize(12);
+        text.setFillColor(sf::Color::White);
+        // centrar el texto debajo del nodo usando la nueva API (position/size)
+        sf::FloatRect tb = text.getLocalBounds();
+        float textWidth = tb.size.x;
+        text.setOrigin({textWidth/2.f, 0.f});
+        text.setPosition({posNodo.x, posNodo.y + radio + 6.f});
+        window.draw(text);
+    }
+}
+
+void drawTree(sf::RenderWindow& window, KDNode* root, const sf::Font* font) {
+    if (!root) return;
+    float xIni = TREE_ORIGIN_X + TREE_PADDING_X;
+    float xFin = WINDOW_WIDTH - TREE_PADDING_X;
+    drawTreeRec(window, root, xIni, xFin, 0.f, font);
+}
+
 void runVisualizer(KDTree& tree, const std::vector<Punto2D>& puntos) {
     sf::RenderWindow window(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), "KD-Tree Visualizer");
 
@@ -178,6 +257,9 @@ void runVisualizer(KDTree& tree, const std::vector<Punto2D>& puntos) {
             drawPoint(window, p, sf::Color::Red);
             drawPointLabel(window, p, fontPtr);
         }
+
+            // DIBUJAR ÁRBOL EN EL PANEL DERECHO
+            drawTree(window, tree.getRoot(), fontPtr);
 
         window.display();
     }

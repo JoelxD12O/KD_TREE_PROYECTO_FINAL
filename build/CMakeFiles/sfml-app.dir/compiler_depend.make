@@ -768,7 +768,6 @@ CMakeFiles/sfml-app.dir/main.cpp.o: /home/kali/proyectofinal/main.cpp \
   /usr/include/c++/15/iomanip \
   /usr/include/c++/15/ios \
   /usr/include/c++/15/iosfwd \
-  /usr/include/c++/15/iostream \
   /usr/include/c++/15/istream \
   /usr/include/c++/15/iterator \
   /usr/include/c++/15/limits \
@@ -943,6 +942,7 @@ sfml-app: /lib/x86_64-linux-gnu/libX11.so.6 \
   /usr/lib/x86_64-linux-gnu/libsfml-system.so.3.0.2 \
   /usr/lib/x86_64-linux-gnu/libsfml-window.so.3.0.2 \
   CMakeFiles/sfml-app.dir/KDTree.cpp.o \
+  CMakeFiles/sfml-app.dir/Visualizer.cpp.o \
   CMakeFiles/sfml-app.dir/main.cpp.o
 
 
@@ -1049,6 +1049,8 @@ sfml-app: /lib/x86_64-linux-gnu/libX11.so.6 \
 /usr/include/c++/15/bits/hashtable.h:
 
 /usr/include/c++/15/bits/fs_path.h:
+
+CMakeFiles/sfml-app.dir/Visualizer.cpp.o:
 
 /usr/include/c++/15/bits/fs_ops.h:
 
