@@ -3,6 +3,6 @@ project(SFMLProject)
 
 find_package(SFML 3.0 REQUIRED COMPONENTS Graphics)
 
-add_executable(sfml-app main.cpp KDTree.cpp)
+add_executable(sfml-app main.cpp KDTree.cpp Visualizer.cpp)
 
 target_link_libraries(sfml-app PRIVATE SFML::Graphics)

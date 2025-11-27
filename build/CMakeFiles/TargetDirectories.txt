@@ -1,0 +1,3 @@
+/home/kali/proyectofinal/build/CMakeFiles/sfml-app.dir
+/home/kali/proyectofinal/build/CMakeFiles/edit_cache.dir
+/home/kali/proyectofinal/build/CMakeFiles/rebuild_cache.dir
