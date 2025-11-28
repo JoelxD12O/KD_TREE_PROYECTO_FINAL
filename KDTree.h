@@ -27,6 +27,8 @@ public:
     void insert(const Punto2D& punto);
 
     KDNode* getRoot() const;
+    // nearest neighbor search: devuelve el punto del árbol más cercano a 'target'
+    Punto2D nearest(const Punto2D& target) const;
 
 private:
     KDNode* root;
