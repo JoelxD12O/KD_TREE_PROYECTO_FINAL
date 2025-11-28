@@ -11,3 +11,4 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos);
 
 // Dibuja el árbol (panel derecho). El parámetro `font` es opcional para etiquetas.
 void drawTree(sf::RenderWindow& window, KDNode* root, const sf::Font* font = nullptr);
+void drawTree(sf::RenderWindow& window, KDNode* root, const sf::Font* font, KDNode* highlightNode, bool isPulse);

@@ -14,7 +14,7 @@ KDNode* KDTree::insertRec(KDNode* nodo, const Punto2D& punto, int nivel) {
     int eje = nivel % 2;
 
     if (eje == 0) {
-        if (punto.x < nodo->punto.x)
+        if (punto.x < nodo->punto.x)//punto.x es la coordenada x del punto a insertar y nodo->punto.x es la coordenada x del nodo actual 
             nodo->izquierdo = insertRec(nodo->izquierdo, punto, nivel + 1);
         else
             nodo->derecho = insertRec(nodo->derecho, punto, nivel + 1);
@@ -28,6 +28,7 @@ KDNode* KDTree::insertRec(KDNode* nodo, const Punto2D& punto, int nivel) {
     return nodo;
 }
 
+
 void KDTree::insert(const Punto2D& punto) {
     root = insertRec(root, punto, 0);
 }
@@ -36,7 +37,7 @@ KDNode* KDTree::getRoot() const {
     return root;
 }
 
-// ============ NEAREST NEIGHBOR: Implementación fiel al pseudocódigo ============
+// ============ NEAREST NEIGHBOR: Implementación  al pseudocódigo ============
 
 // Función auxiliar: distancia al cuadrado entre dos puntos
 static inline float distSquared(const Punto2D& a, const Punto2D& b) {
@@ -60,7 +61,6 @@ static KDNode* closest(const Punto2D& target, KDNode* temp, KDNode* current) {
 // Algoritmo recursivo de nearest neighbor en KD-tree
 // Devuelve el nodo del árbol cuyo punto está más cerca de 'target'
 static KDNode* nearestNeighbor(KDNode* root, const Punto2D& target, int depth) {
-    // 1️⃣ Caso base
     if (root == nullptr)
         return nullptr;
 

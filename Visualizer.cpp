@@ -4,8 +4,48 @@
 #include <memory>
 #include <unordered_map>
 #include <string>
+#include <deque>
+#include <functional>
+#include <cmath>
+#include <locale>
+#include <codecvt>
 
 // Reuse KDTree types: Punto2D, KDNode, KDTree
+
+//---------------------- Soporte UTF-8 para tildes y ñ ---------------------
+// Helper para convertir std::string UTF-8 a sf::String (soporta Unicode)
+static sf::String toUtf8(const std::string& str) {
+    return sf::String::fromUtf8(str.begin(), str.end());
+}
+
+//---------------------- Sistema de Animación ---------------------
+enum class AnimationType {
+    NONE,
+    INSERT,
+    SEARCH
+};
+
+struct AnimationStep {
+    KDNode* currentNode;
+    std::string description;
+    bool isComparison;
+    bool isLeaf;
+    int axis; // 0=X, 1=Y
+    Punto2D targetPoint;
+};
+
+struct AnimationState {
+    AnimationType type = AnimationType::NONE;
+    std::deque<AnimationStep> steps;
+    int currentStepIndex = -1;
+    sf::Clock stepClock;
+    float stepDuration = 1.3f; // segundos por paso (más rápido: 0.5s)
+    bool paused = false;
+    bool autoAdvance = true;
+    Punto2D searchTarget{0.f, 0.f};
+    Punto2D foundNearest{0.f, 0.f};
+    bool hasResult = false;
+};
 
 //---------------------- Configuración de SFML ---------------------_
 const int WINDOW_WIDTH  = 1000;
@@ -32,6 +72,202 @@ struct Region {
     float minX, maxX;
     float minY, maxY;
 };
+
+//---------------------- Funciones de Generación de Animación ---------------------
+
+// Genera pasos de animación para la inserción de un punto
+static void generateInsertAnimation(KDNode* root, const Punto2D& punto, AnimationState& anim) {
+    anim.steps.clear();
+    anim.currentStepIndex = -1;
+    anim.type = AnimationType::INSERT;
+    
+    KDNode* current = root;
+    int nivel = 0;
+    
+    while (current) {
+        int eje = nivel % 2;
+        AnimationStep step;
+        step.currentNode = current;
+        step.targetPoint = punto;
+        step.axis = eje;
+        step.isComparison = true;
+        
+        if (eje == 0) {
+            if (punto.x < current->punto.x) {
+                step.description = "Comparar X: " + std::to_string((int)punto.x) + " < " + 
+                                 std::to_string((int)current->punto.x) + " → IR IZQUIERDA";
+                anim.steps.push_back(step);
+                if (!current->izquierdo) {
+                    AnimationStep leafStep;
+                    leafStep.currentNode = current;
+                    leafStep.targetPoint = punto;
+                    leafStep.isLeaf = true;
+                    leafStep.description = "Insertar aquí (hijo izquierdo)";
+                    anim.steps.push_back(leafStep);
+                    break;
+                }
+                current = current->izquierdo;
+            } else {
+                step.description = "Comparar X: " + std::to_string((int)punto.x) + " >= " + 
+                                 std::to_string((int)current->punto.x) + " → IR DERECHA";
+                anim.steps.push_back(step);
+                if (!current->derecho) {
+                    AnimationStep leafStep;
+                    leafStep.currentNode = current;
+                    leafStep.targetPoint = punto;
+                    leafStep.isLeaf = true;
+                    leafStep.description = "Insertar aquí (hijo derecho)";
+                    anim.steps.push_back(leafStep);
+                    break;
+                }
+                current = current->derecho;
+            }
+        } else {
+            if (punto.y < current->punto.y) {
+                step.description = "Comparar Y: " + std::to_string((int)punto.y) + " < " + 
+                                 std::to_string((int)current->punto.y) + " → IR IZQUIERDA";
+                anim.steps.push_back(step);
+                if (!current->izquierdo) {
+                    AnimationStep leafStep;
+                    leafStep.currentNode = current;
+                    leafStep.targetPoint = punto;
+                    leafStep.isLeaf = true;
+                    leafStep.description = "Insertar aquí (hijo izquierdo)";
+                    anim.steps.push_back(leafStep);
+                    break;
+                }
+                current = current->izquierdo;
+            } else {
+                step.description = "Comparar Y: " + std::to_string((int)punto.y) + " >= " + 
+                                 std::to_string((int)current->punto.y) + " → IR DERECHA";
+                anim.steps.push_back(step);
+                if (!current->derecho) {
+                    AnimationStep leafStep;
+                    leafStep.currentNode = current;
+                    leafStep.targetPoint = punto;
+                    leafStep.isLeaf = true;
+                    leafStep.description = "Insertar aquí (hijo derecho)";
+                    anim.steps.push_back(leafStep);
+                    break;
+                }
+                current = current->derecho;
+            }
+        }
+        nivel++;
+    }
+}
+
+// Genera pasos de animación para la búsqueda del nearest neighbor
+// Esta función simula EXACTAMENTE el algoritmo con PODA
+static void generateSearchAnimation(KDNode* root, const Punto2D& target, AnimationState& anim) {
+    anim.steps.clear();
+    anim.currentStepIndex = -1;
+    anim.type = AnimationType::SEARCH;
+    anim.searchTarget = target;
+    
+    // Variables para rastrear el mejor punto encontrado
+    KDNode* bestSoFar = nullptr;
+    float bestDistSoFar = std::numeric_limits<float>::infinity();
+    
+    // Función recursiva que simula nearestNeighbor CON PODA
+    std::function<void(KDNode*, int)> nearestWithPruning = [&](KDNode* node, int depth) {
+        if (!node) return;
+        
+        // Paso 1: Visitar el nodo actual
+        AnimationStep visitStep;
+        visitStep.currentNode = node;
+        visitStep.targetPoint = target;
+        visitStep.axis = depth % 2;
+        visitStep.isComparison = true;
+        
+        float dx = target.x - node->punto.x;
+        float dy = target.y - node->punto.y;
+        float distSquared = dx*dx + dy*dy;
+        float dist = std::sqrt(distSquared);
+        
+        visitStep.description = "Visitar (" + std::to_string((int)node->punto.x) + ", " + 
+                               std::to_string((int)node->punto.y) + ") | Dist: " + 
+                               std::to_string((int)dist);
+        
+        // Actualizar mejor si este es más cercano
+        if (distSquared < bestDistSoFar) {
+            bestDistSoFar = distSquared;
+            bestSoFar = node;
+            visitStep.description += " ← NUEVO MEJOR!";
+        }
+        anim.steps.push_back(visitStep);
+        
+        // Paso 2: Determinar nextBranch y otherBranch
+        int axis = depth % 2;
+        KDNode* nextBranch = nullptr;
+        KDNode* otherBranch = nullptr;
+        
+        if (axis == 0) { // Eje X
+            if (target.x < node->punto.x) {
+                nextBranch = node->izquierdo;
+                otherBranch = node->derecho;
+            } else {
+                nextBranch = node->derecho;
+                otherBranch = node->izquierdo;
+            }
+        } else { // Eje Y
+            if (target.y < node->punto.y) {
+                nextBranch = node->izquierdo;
+                otherBranch = node->derecho;
+            } else {
+                nextBranch = node->derecho;
+                otherBranch = node->izquierdo;
+            }
+        }
+        
+        // Paso 3: Buscar en nextBranch (lado "correcto")
+        if (nextBranch) {
+            nearestWithPruning(nextBranch, depth + 1);
+        }
+        
+        // Paso 4: PODA - ¿Explorar otherBranch?
+        float planeDistance = (axis == 0) ? (target.x - node->punto.x) : (target.y - node->punto.y);
+        float planeDistSquared = planeDistance * planeDistance;
+        
+        if (planeDistSquared < bestDistSoFar) {
+            // El círculo intersecta el plano → explorar la otra rama
+            AnimationStep pruneStep;
+            pruneStep.currentNode = node;
+            pruneStep.targetPoint = target;
+            pruneStep.axis = axis;
+            pruneStep.isComparison = false;
+            pruneStep.description = "Radio r=" + std::to_string((int)std::sqrt(bestDistSoFar)) + 
+                                   " INTERSECTA plano → Explorar otra rama";
+            anim.steps.push_back(pruneStep);
+            
+            if (otherBranch) {
+                nearestWithPruning(otherBranch, depth + 1);
+            }
+        } else {
+            // PODA: el círculo NO intersecta → NO explorar
+            AnimationStep pruneStep;
+            pruneStep.currentNode = node;
+            pruneStep.targetPoint = target;
+            pruneStep.axis = axis;
+            pruneStep.isComparison = false;
+            pruneStep.description = "Radio r=" + std::to_string((int)std::sqrt(bestDistSoFar)) + 
+                                   " NO intersecta plano → ¡PODAR! (saltar rama)";
+            anim.steps.push_back(pruneStep);
+        }
+    };
+    
+    nearestWithPruning(root, 0);
+    
+    // Paso final: mostrar resultado
+    if (bestSoFar) {
+        AnimationStep finalStep;
+        finalStep.currentNode = bestSoFar;
+        finalStep.targetPoint = target;
+        finalStep.isLeaf = true;
+        finalStep.description = "RESULTADO: Vecino más cercano encontrado!";
+        anim.steps.push_back(finalStep);
+    }
+}
 
 static sf::Vector2f mapToPlane(const Punto2D& p) {
     float normX = p.x / MAX_COORD; // 0..1
@@ -232,7 +468,9 @@ static void assignPositionsImproved(KDNode* node,
 
 static void drawTreeRec2(sf::RenderWindow& window, KDNode* node,
                          const std::unordered_map<KDNode*, float>& xpos,
-                         const sf::Font* font) {
+                         const sf::Font* font,
+                         KDNode* highlightNode = nullptr,
+                         bool isPulse = false) {
     if (!node) return;
     float x = xpos.at(node);
     float y = TREE_PADDING_Y + node->nivel * TREE_LEVEL_H;
@@ -257,7 +495,20 @@ static void drawTreeRec2(sf::RenderWindow& window, KDNode* node,
     // draw node
     float radio = 12.f;
     sf::CircleShape circle(radio);
-    circle.setFillColor(sf::Color(50, 120, 255));
+    
+    // Resaltar nodo durante animación
+    if (node == highlightNode) {
+        if (isPulse) {
+            circle.setFillColor(sf::Color(255, 200, 0)); // Amarillo pulsante
+            radio = 15.f;
+            circle.setRadius(radio);
+        } else {
+            circle.setFillColor(sf::Color(255, 150, 0)); // Naranja
+        }
+    } else {
+        circle.setFillColor(sf::Color(50, 120, 255));
+    }
+    
     circle.setOrigin(sf::Vector2f(radio, radio));
     circle.setPosition(posNodo);
     window.draw(circle);
@@ -273,11 +524,16 @@ static void drawTreeRec2(sf::RenderWindow& window, KDNode* node,
         window.draw(text);
     }
 
-    if (node->izquierdo) drawTreeRec2(window, node->izquierdo, xpos, font);
-    if (node->derecho) drawTreeRec2(window, node->derecho, xpos, font);
+    if (node->izquierdo) drawTreeRec2(window, node->izquierdo, xpos, font, highlightNode, isPulse);
+    if (node->derecho) drawTreeRec2(window, node->derecho, xpos, font, highlightNode, isPulse);
 }
 
 void drawTree(sf::RenderWindow& window, KDNode* root, const sf::Font* font) {
+    drawTree(window, root, font, nullptr, false);
+}
+
+void drawTree(sf::RenderWindow& window, KDNode* root, const sf::Font* font, 
+             KDNode* highlightNode, bool isPulse) {
     if (!root) return;
     
     // Calcular ancho total del árbol
@@ -294,11 +550,65 @@ void drawTree(sf::RenderWindow& window, KDNode* root, const sf::Font* font) {
         kv.second += offset;
     }
 
-    drawTreeRec2(window, root, xpos, font);
+    drawTreeRec2(window, root, xpos, font, highlightNode, isPulse);
+}
+
+// Dibuja el panel de información de la animación
+static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& anim, const sf::Font* font) {
+    if (!font || anim.type == AnimationType::NONE || anim.currentStepIndex < 0) return;
+    if (anim.currentStepIndex >= (int)anim.steps.size()) return;
+    
+    const auto& step = anim.steps[anim.currentStepIndex];
+    
+    // Panel de información en la parte inferior
+    float panelY = WINDOW_HEIGHT - 80.f;
+    sf::RectangleShape panel({WINDOW_WIDTH, 80.f});
+    panel.setPosition({0.f, panelY});
+    panel.setFillColor(sf::Color(20, 20, 20, 240));
+    window.draw(panel);
+    
+    // Título del algoritmo
+    sf::String title = (anim.type == AnimationType::INSERT) ? toUtf8("ANIMACIÓN: INSERCIÓN") : toUtf8("ANIMACIÓN: BÚSQUEDA NEAREST NEIGHBOR");
+    sf::Text titleText(*font, title, 16);
+    titleText.setFillColor(sf::Color::Yellow);
+    titleText.setPosition({20.f, panelY + 10.f});
+    titleText.setStyle(sf::Text::Bold);
+    window.draw(titleText);
+    
+    // Descripción del paso actual
+    sf::Text desc(*font, toUtf8(step.description), 14);
+    desc.setFillColor(sf::Color::White);
+    desc.setPosition({20.f, panelY + 35.f});
+    window.draw(desc);
+    
+    // Contador de pasos
+    std::string counter = "Paso " + std::to_string(anim.currentStepIndex + 1) + " / " + std::to_string(anim.steps.size());
+    sf::Text counterText(*font, counter, 12);
+    counterText.setFillColor(sf::Color(200, 200, 200));
+    counterText.setPosition({20.f, panelY + 60.f});
+    window.draw(counterText);
+    
+    // Controles
+    std::string controls = "[ESPACIO] Pausar  [→←] Pasos  [↑↓] Velocidad  [ESC] Cancelar";
+    sf::Text controlsText(*font, controls, 11);
+    controlsText.setFillColor(sf::Color(150, 150, 150));
+    controlsText.setPosition({300.f, panelY + 60.f});
+    window.draw(controlsText);
+    
+    // Mostrar velocidad actual
+    std::string speedInfo = "Velocidad: " + std::to_string(anim.stepDuration).substr(0, 3) + "s";
+    sf::Text speedText(*font, speedInfo, 11);
+    speedText.setFillColor(sf::Color(100, 255, 100));
+    speedText.setPosition({WINDOW_WIDTH - 150.f, panelY + 60.f});
+    window.draw(speedText);
 }
 
 void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
-    sf::RenderWindow window(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), "KD-Tree Visualizer");
+    // Configurar locale para soporte UTF-8
+    std::locale::global(std::locale("es_ES.UTF-8"));
+    std::cout.imbue(std::locale());
+    
+    sf::RenderWindow window(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), toUtf8("Visualizador KD-Tree"));
 
     // Cargar fuente para labels si está disponible
     sf::Font labelFont;
@@ -340,8 +650,8 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
     if (fontPtr) {
         textX = std::make_unique<sf::Text>(*fontPtr, "", 14);
         textY = std::make_unique<sf::Text>(*fontPtr, "", 14);
-        textBtn = std::make_unique<sf::Text>(*fontPtr, "Agregar", 14);
-        textSearch = std::make_unique<sf::Text>(*fontPtr, "Buscar", 14);
+        textBtn = std::make_unique<sf::Text>(*fontPtr, toUtf8("Añadir"), 14);
+        textSearch = std::make_unique<sf::Text>(*fontPtr, toUtf8("Buscar"), 14);
         labelX = std::make_unique<sf::Text>(*fontPtr, "X:", 12);
         labelY = std::make_unique<sf::Text>(*fontPtr, "Y:", 12);
         textX->setFillColor(sf::Color::White); textY->setFillColor(sf::Color::White); textBtn->setFillColor(sf::Color::Black);
@@ -352,13 +662,73 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
     // Nearest search result
     bool hasNearest = false;
     Punto2D nearestPoint{0.f,0.f};
+    
+    // Estado de animación
+    AnimationState animState;
 
     while (window.isOpen()) {
+        // Avance automático de animación
+        if (animState.type != AnimationType::NONE && !animState.paused && animState.autoAdvance) {
+            if (animState.stepClock.getElapsedTime().asSeconds() >= animState.stepDuration) {
+                animState.currentStepIndex++;
+                if (animState.currentStepIndex >= (int)animState.steps.size()) {
+                    // Animación terminada
+                    if (animState.type == AnimationType::SEARCH && animState.hasResult) {
+                        hasNearest = true;
+                        nearestPoint = animState.foundNearest;
+                    }
+                    animState.type = AnimationType::NONE;
+                    animState.currentStepIndex = -1;
+                } else {
+                    animState.stepClock.restart();
+                }
+            }
+        }
+        
         while (auto event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) { window.close(); break; }
 
             if (const auto* key = event->getIf<sf::Event::KeyPressed>()) {
-                if (key->scancode == sf::Keyboard::Scancode::Escape) { window.close(); break; }
+                if (key->scancode == sf::Keyboard::Scancode::Escape) {
+                    if (animState.type != AnimationType::NONE) {
+                        // Cancelar animación
+                        animState.type = AnimationType::NONE;
+                        animState.currentStepIndex = -1;
+                    } else {
+                        window.close();
+                    }
+                    break;
+                }
+                
+                // Controles de animación
+                if (animState.type != AnimationType::NONE) {
+                    if (key->scancode == sf::Keyboard::Scancode::Space) {
+                        animState.paused = !animState.paused;
+                        animState.stepClock.restart();
+                    }
+                    if (key->scancode == sf::Keyboard::Scancode::Right) {
+                        if (animState.currentStepIndex < (int)animState.steps.size() - 1) {
+                            animState.currentStepIndex++;
+                            animState.stepClock.restart();
+                        }
+                    }
+                    if (key->scancode == sf::Keyboard::Scancode::Left) {
+                        if (animState.currentStepIndex > 0) {
+                            animState.currentStepIndex--;
+                            animState.stepClock.restart();
+                        }
+                    }
+                    // Control de velocidad con teclas Up/Down
+                    if (key->scancode == sf::Keyboard::Scancode::Up) {
+                        animState.stepDuration = std::max(0.1f, animState.stepDuration - 0.1f);
+                        std::cout << "Velocidad aumentada: " << animState.stepDuration << "s por paso\n";
+                    }
+                    if (key->scancode == sf::Keyboard::Scancode::Down) {
+                        animState.stepDuration = std::min(2.0f, animState.stepDuration + 0.1f);
+                        std::cout << "Velocidad reducida: " << animState.stepDuration << "s por paso\n";
+                    }
+                    continue;
+                }
                 if (key->scancode == sf::Keyboard::Scancode::Backspace) {
                     if (activeX && !inputX.empty()) inputX.pop_back();
                     else if (activeY && !inputY.empty()) inputY.pop_back();
@@ -395,18 +765,39 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                         try {
                             if (!inputX.empty() && !inputY.empty()) {
                                 float rx = std::stof(inputX); float ry = std::stof(inputY);
-                                Punto2D p{rx, ry}; tree.insert(p); puntos.push_back(p); inputX.clear(); inputY.clear();
+                                Punto2D p{rx, ry};
+                                
+                                // Iniciar animación de inserción si hay árbol
+                                if (tree.getRoot() != nullptr) {
+                                    generateInsertAnimation(tree.getRoot(), p, animState);
+                                    animState.currentStepIndex = 0;
+                                    animState.stepClock.restart();
+                                    animState.paused = false;
+                                }
+                                
+                                tree.insert(p); 
+                                puntos.push_back(p); 
+                                inputX.clear(); inputY.clear();
                             }
                         } catch(...){}
                         activeX = activeY = false;
                     } else if (buttonSearch.getGlobalBounds().contains(mpos)) {
-                        // Buscar el nearest usando los campos X/Y si están completos
+                        // Iniciar animación de búsqueda
                         try {
                             if (!inputX.empty() && !inputY.empty() && tree.getRoot()!=nullptr) {
                                 float tx = std::stof(inputX); float ty = std::stof(inputY);
                                 Punto2D target{tx, ty};
+                                
+                                // Generar animación de búsqueda
+                                generateSearchAnimation(tree.getRoot(), target, animState);
+                                animState.currentStepIndex = 0;
+                                animState.stepClock.restart();
+                                animState.paused = false;
+                                
+                                // Calcular resultado
                                 nearestPoint = tree.nearest(target);
-                                hasNearest = true;
+                                animState.foundNearest = nearestPoint;
+                                animState.hasResult = true;
                             }
                         } catch(...) { }
                         activeX = activeY = false;
@@ -451,9 +842,25 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
         }
 
         for (const auto& p : puntos) { drawPoint(window, p, sf::Color::Red); drawPointLabel(window, p, fontPtr); }
+        
+        // Resaltar punto objetivo durante animación
+        if (animState.type != AnimationType::NONE && animState.currentStepIndex >= 0 && 
+            animState.currentStepIndex < (int)animState.steps.size()) {
+            const auto& step = animState.steps[animState.currentStepIndex];
+            sf::Vector2f targetPos = mapToPlane(step.targetPoint);
+            
+            float r = 7.f;
+            sf::CircleShape targetCircle(r);
+            targetCircle.setOrigin(sf::Vector2f(r, r));
+            targetCircle.setPosition(targetPos);
+            targetCircle.setFillColor(sf::Color(255, 100, 255)); // Magenta para target
+            targetCircle.setOutlineThickness(2.f);
+            targetCircle.setOutlineColor(sf::Color::White);
+            window.draw(targetCircle);
+        }
 
-        // draw nearest result if exists
-        if (hasNearest) {
+        // draw nearest result if exists (y no hay animación activa)
+        if (hasNearest && animState.type == AnimationType::NONE) {
             // highlight with a larger yellow circle and label
             sf::Vector2f np = mapToPlane(nearestPoint);
             float r = 9.f;
@@ -463,8 +870,8 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
             c.setFillColor(sf::Color::Yellow);
             window.draw(c);
             if (fontPtr) {
-                std::string lab = "Nearest: (" + std::to_string((int)nearestPoint.x) + ", " + std::to_string((int)nearestPoint.y) + ")";
-                sf::Text t(*fontPtr, lab);
+                std::string lab = "Más cercano: (" + std::to_string((int)nearestPoint.x) + ", " + std::to_string((int)nearestPoint.y) + ")";
+                sf::Text t(*fontPtr, toUtf8(lab));
                 t.setCharacterSize(13);
                 t.setFillColor(sf::Color::Black);
                 t.setPosition(sf::Vector2f(np.x + 12.f, np.y - 6.f));
@@ -472,9 +879,20 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
             }
         }
 
-        // draw tree (right panel)
-        drawTree(window, tree.getRoot(), fontPtr);
+        // draw tree (right panel) con highlight si hay animación
+        KDNode* highlightNode = nullptr;
+        bool isPulse = false;
+        if (animState.type != AnimationType::NONE && animState.currentStepIndex >= 0 && 
+            animState.currentStepIndex < (int)animState.steps.size()) {
+            highlightNode = animState.steps[animState.currentStepIndex].currentNode;
+            isPulse = true;
+        }
+        drawTree(window, tree.getRoot(), fontPtr, highlightNode, isPulse);
+        
+        // Dibujar panel de información de animación
+        drawAnimationInfo(window, animState, fontPtr);
 
         window.display();
     }
 }
+//eesto es del sfml
