@@ -9,6 +9,7 @@
 #include <cmath>
 #include <locale>
 #include <codecvt>
+#include <chrono>
 
 // Reuse KDTree types: Punto2D, KDNode, KDTree
 
@@ -46,6 +47,7 @@ struct AnimationState {
     Punto2D searchTarget{0.f, 0.f};
     Punto2D foundNearest{0.f, 0.f};
     bool hasResult = false;
+    double executionTimeMicros = 0.0; // Tiempo real de ejecución en microsegundos
 };
 
 //---------------------- Estado de Búsqueda por Rango ---------------------
@@ -107,7 +109,7 @@ static void generateInsertAnimation(KDNode* root, const Punto2D& punto, Animatio
         if (eje == 0) {
             if (punto.x < current->punto.x) {
                 step.description = "Comparar X: " + std::to_string((int)punto.x) + " < " + 
-                                 std::to_string((int)current->punto.x) + " → IR IZQUIERDA";
+                                 std::to_string((int)current->punto.x) + " -> IR IZQUIERDA";
                 anim.steps.push_back(step);
                 if (!current->izquierdo) {
                     AnimationStep leafStep;
@@ -121,7 +123,7 @@ static void generateInsertAnimation(KDNode* root, const Punto2D& punto, Animatio
                 current = current->izquierdo;
             } else {
                 step.description = "Comparar X: " + std::to_string((int)punto.x) + " >= " + 
-                                 std::to_string((int)current->punto.x) + " → IR DERECHA";
+                                 std::to_string((int)current->punto.x) + " -> IR DERECHA";
                 anim.steps.push_back(step);
                 if (!current->derecho) {
                     AnimationStep leafStep;
@@ -137,7 +139,7 @@ static void generateInsertAnimation(KDNode* root, const Punto2D& punto, Animatio
         } else {
             if (punto.y < current->punto.y) {
                 step.description = "Comparar Y: " + std::to_string((int)punto.y) + " < " + 
-                                 std::to_string((int)current->punto.y) + " → IR IZQUIERDA";
+                                 std::to_string((int)current->punto.y) + " -> IR IZQUIERDA";
                 anim.steps.push_back(step);
                 if (!current->izquierdo) {
                     AnimationStep leafStep;
@@ -151,7 +153,7 @@ static void generateInsertAnimation(KDNode* root, const Punto2D& punto, Animatio
                 current = current->izquierdo;
             } else {
                 step.description = "Comparar Y: " + std::to_string((int)punto.y) + " >= " + 
-                                 std::to_string((int)current->punto.y) + " → IR DERECHA";
+                                 std::to_string((int)current->punto.y) + " -> IR DERECHA";
                 anim.steps.push_back(step);
                 if (!current->derecho) {
                     AnimationStep leafStep;
@@ -249,7 +251,7 @@ static void generateSearchAnimation(KDNode* root, const Punto2D& target, Animati
             pruneStep.axis = axis;
             pruneStep.isComparison = false;
             pruneStep.description = "Radio r=" + std::to_string((int)std::sqrt(bestDistSoFar)) + 
-                                   " INTERSECTA plano → Explorar otra rama";
+                                   " INTERSECTA plano -> Explorar otra rama";
             anim.steps.push_back(pruneStep);
             
             if (otherBranch) {
@@ -263,7 +265,7 @@ static void generateSearchAnimation(KDNode* root, const Punto2D& target, Animati
             pruneStep.axis = axis;
             pruneStep.isComparison = false;
             pruneStep.description = "Radio r=" + std::to_string((int)std::sqrt(bestDistSoFar)) + 
-                                   " NO intersecta plano → ¡PODAR! (saltar rama)";
+                                   " NO intersecta plano -> PODAR! (saltar rama)";
             anim.steps.push_back(pruneStep);
         }
     };
@@ -328,7 +330,7 @@ static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect,
             foundStep.currentNode = node;
             foundStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
             foundStep.isLeaf = true;
-            foundStep.description = "✓ Punto DENTRO del rectángulo → agregar a resultados";
+            foundStep.description = "[+] Punto DENTRO del rectangulo -> agregar a resultados";
             anim.steps.push_back(foundStep);
             foundPoints.push_back(node->punto);
         } else {
@@ -336,7 +338,7 @@ static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect,
             notFoundStep.currentNode = node;
             notFoundStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
             notFoundStep.isComparison = false;
-            notFoundStep.description = "✗ Punto FUERA del rectángulo";
+            notFoundStep.description = "[-] Punto FUERA del rectangulo";
             anim.steps.push_back(notFoundStep);
         }
         
@@ -355,7 +357,7 @@ static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect,
             leftStep.axis = axis;
             leftStep.isComparison = false;
             leftStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
-                                 " intersecta rango → Explorar rama IZQUIERDA";
+                                 " intersecta rango -> Explorar rama IZQUIERDA";
             anim.steps.push_back(leftStep);
             rangeSearchRec(node->izquierdo, depth + 1);
         } else if (node->izquierdo) {
@@ -365,7 +367,7 @@ static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect,
             pruneLeftStep.axis = axis;
             pruneLeftStep.isComparison = false;
             pruneLeftStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
-                                       " NO intersecta → PODAR rama izquierda";
+                                       " NO intersecta -> PODAR rama izquierda";
             anim.steps.push_back(pruneLeftStep);
         }
         
@@ -376,7 +378,7 @@ static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect,
             rightStep.axis = axis;
             rightStep.isComparison = false;
             rightStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
-                                  " intersecta rango → Explorar rama DERECHA";
+                                  " intersecta rango -> Explorar rama DERECHA";
             anim.steps.push_back(rightStep);
             rangeSearchRec(node->derecho, depth + 1);
         } else if (node->derecho) {
@@ -386,7 +388,7 @@ static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect,
             pruneRightStep.axis = axis;
             pruneRightStep.isComparison = false;
             pruneRightStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
-                                        " NO intersecta → PODAR rama derecha";
+                                        " NO intersecta -> PODAR rama derecha";
             anim.steps.push_back(pruneRightStep);
         }
     };
@@ -754,20 +756,30 @@ static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& an
     panel.setFillColor(sf::Color(20, 20, 20, 240));
     window.draw(panel);
     
-    // Título del algoritmo
+    // Título del algoritmo con complejidad
     sf::String title;
+    std::string complexity;
     if (anim.type == AnimationType::INSERT) {
         title = toUtf8("ANIMACIÓN: INSERCIÓN");
+        complexity = "O(log n) promedio";
     } else if (anim.type == AnimationType::SEARCH) {
         title = toUtf8("ANIMACIÓN: BÚSQUEDA NEAREST NEIGHBOR");
+        complexity = "O(log n) promedio con poda";
     } else if (anim.type == AnimationType::RANGE_SEARCH) {
         title = toUtf8("ANIMACIÓN: BÚSQUEDA POR RANGO");
+        complexity = "O(sqrt(n) + k) donde k = resultados";
     }
     sf::Text titleText(*font, title, 16);
     titleText.setFillColor(sf::Color::Yellow);
     titleText.setPosition({20.f, panelY + 10.f});
     titleText.setStyle(sf::Text::Bold);
     window.draw(titleText);
+    
+    // Mostrar complejidad
+    sf::Text complexityText(*font, complexity, 11);
+    complexityText.setFillColor(sf::Color(150, 200, 255));
+    complexityText.setPosition({WINDOW_WIDTH - 400.f, panelY + 10.f});
+    window.draw(complexityText);
     
     // Descripción del paso actual
     sf::Text desc(*font, toUtf8(step.description), 14);
@@ -782,18 +794,36 @@ static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& an
     counterText.setPosition({20.f, panelY + 60.f});
     window.draw(counterText);
     
+    // Mostrar tiempo de ejecución real
+    if (anim.executionTimeMicros > 0.0) {
+        std::string timeInfo;
+        if (anim.executionTimeMicros < 1000.0) {
+            // Mostrar en microsegundos si es menor a 1ms con valor exacto
+            timeInfo = "Tiempo: " + std::to_string(anim.executionTimeMicros) + " us";
+        } else {
+            // Mostrar en milisegundos con valor exacto
+            double ms = anim.executionTimeMicros / 1000.0;
+            timeInfo = "Tiempo: " + std::to_string(ms) + " ms";
+        }
+        sf::Text timeText(*font, timeInfo, 12);
+        timeText.setFillColor(sf::Color(255, 200, 100));
+        timeText.setStyle(sf::Text::Bold);
+        timeText.setPosition({WINDOW_WIDTH - 250.f, panelY + 35.f});
+        window.draw(timeText);
+    }
+    
     // Controles
-    std::string controls = "[ESPACIO] Pausar  [→←] Pasos  [↑↓] Velocidad  [ESC] Cancelar";
-    sf::Text controlsText(*font, controls, 11);
+    std::string controls = "[ESPACIO] Pausar  [<->] Pasos  [^v] Velocidad  [ESC] Cancelar  [R] Reset";
+    sf::Text controlsText(*font, controls, 10);
     controlsText.setFillColor(sf::Color(150, 150, 150));
-    controlsText.setPosition({300.f, panelY + 60.f});
+    controlsText.setPosition({250.f, panelY + 60.f});
     window.draw(controlsText);
     
-    // Mostrar velocidad actual
-    std::string speedInfo = "Velocidad: " + std::to_string(anim.stepDuration).substr(0, 3) + "s";
+    // Mostrar velocidad actual de animación
+    std::string speedInfo = "Anim: " + std::to_string(anim.stepDuration).substr(0, 3) + "s";
     sf::Text speedText(*font, speedInfo, 11);
     speedText.setFillColor(sf::Color(100, 255, 100));
-    speedText.setPosition({WINDOW_WIDTH - 150.f, panelY + 60.f});
+    speedText.setPosition({WINDOW_WIDTH - 100.f, panelY + 60.f});
     window.draw(speedText);
 }
 
@@ -999,9 +1029,16 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                                     animState.paused = false;
                                 }
                                 
+                                // Medir tiempo de inserción
+                                auto start = std::chrono::high_resolution_clock::now();
                                 tree.insert(p); 
+                                auto end = std::chrono::high_resolution_clock::now();
+                                animState.executionTimeMicros = std::chrono::duration<double, std::micro>(end - start).count();
+                                
                                 puntos.push_back(p); 
                                 inputX.clear(); inputY.clear();
+                                
+                                std::cout << "Tiempo de ejecución insert: " << animState.executionTimeMicros << " us\n";
                             }
                         } catch(...){}
                         activeX = activeY = false;
@@ -1018,10 +1055,16 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                                 animState.stepClock.restart();
                                 animState.paused = false;
                                 
-                                // Calcular resultado
+                                // Calcular resultado y medir tiempo
+                                auto start = std::chrono::high_resolution_clock::now();
                                 nearestPoint = tree.nearest(target);
+                                auto end = std::chrono::high_resolution_clock::now();
+                                animState.executionTimeMicros = std::chrono::duration<double, std::micro>(end - start).count();
+                                
                                 animState.foundNearest = nearestPoint;
                                 animState.hasResult = true;
+                                
+                                std::cout << "Tiempo de ejecución nearest neighbor: " << animState.executionTimeMicros << " us\n";
                             }
                         } catch(...) { }
                         activeX = activeY = false;
@@ -1083,14 +1126,24 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                     rangeState.rectangulo.ymin = std::min(y1, y2);
                     rangeState.rectangulo.ymax = std::max(y1, y2);
                     
-                    // Iniciar animación de búsqueda por rango
+                    // Iniciar animación de búsqueda por rango y medir tiempo
                     if (tree.getRoot() != nullptr) {
+                        // Primero hacer la búsqueda real para medir el tiempo
+                        auto start = std::chrono::high_resolution_clock::now();
+                        std::vector<Punto2D> resultados = tree.rangeSearch(rangeState.rectangulo);
+                        auto end = std::chrono::high_resolution_clock::now();
+                        animState.executionTimeMicros = std::chrono::duration<double, std::micro>(end - start).count();
+                        
+                        // Luego generar la animación (usa el mismo algoritmo internamente)
                         generateRangeSearchAnimation(tree.getRoot(), rangeState.rectangulo, 
                                                     animState, rangeState.puntosEncontrados);
                         animState.currentStepIndex = 0;
                         animState.stepClock.restart();
                         animState.paused = false;
                         rangeState.tieneResultado = true;
+                        
+                        std::cout << "Tiempo de ejecución range search: " << animState.executionTimeMicros 
+                                  << " us (" << (animState.executionTimeMicros / 1000.0) << " ms)\n";
                     }
                 }
             }
