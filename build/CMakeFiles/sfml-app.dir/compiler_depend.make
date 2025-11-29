@@ -55,12 +55,15 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o: /home/kali/proyectofinal/KDTree.cpp \
   /usr/include/c++/15/bits/specfun.h \
   /usr/include/c++/15/bits/std_abs.h \
   /usr/include/c++/15/bits/stl_algobase.h \
+  /usr/include/c++/15/bits/stl_bvector.h \
   /usr/include/c++/15/bits/stl_construct.h \
   /usr/include/c++/15/bits/stl_function.h \
   /usr/include/c++/15/bits/stl_iterator.h \
   /usr/include/c++/15/bits/stl_iterator_base_funcs.h \
   /usr/include/c++/15/bits/stl_iterator_base_types.h \
   /usr/include/c++/15/bits/stl_pair.h \
+  /usr/include/c++/15/bits/stl_uninitialized.h \
+  /usr/include/c++/15/bits/stl_vector.h \
   /usr/include/c++/15/bits/streambuf.tcc \
   /usr/include/c++/15/bits/streambuf_iterator.h \
   /usr/include/c++/15/bits/string_view.tcc \
@@ -68,6 +71,7 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o: /home/kali/proyectofinal/KDTree.cpp \
   /usr/include/c++/15/bits/uses_allocator.h \
   /usr/include/c++/15/bits/uses_allocator_args.h \
   /usr/include/c++/15/bits/utility.h \
+  /usr/include/c++/15/bits/vector.tcc \
   /usr/include/c++/15/bits/version.h \
   /usr/include/c++/15/cctype \
   /usr/include/c++/15/cerrno \
@@ -116,6 +120,7 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o: /home/kali/proyectofinal/KDTree.cpp \
   /usr/include/c++/15/tuple \
   /usr/include/c++/15/type_traits \
   /usr/include/c++/15/typeinfo \
+  /usr/include/c++/15/vector \
   /usr/include/ctype.h \
   /usr/include/endian.h \
   /usr/include/errno.h \
@@ -824,6 +829,7 @@ CMakeFiles/sfml-app.dir/main.cpp.o: /home/kali/proyectofinal/main.cpp \
   /usr/include/c++/15/iomanip \
   /usr/include/c++/15/ios \
   /usr/include/c++/15/iosfwd \
+  /usr/include/c++/15/iostream \
   /usr/include/c++/15/istream \
   /usr/include/c++/15/iterator \
   /usr/include/c++/15/limits \
@@ -1046,8 +1052,6 @@ sfml-app: /lib/x86_64-linux-gnu/libX11.so.6 \
 
 /usr/include/x86_64-linux-gnu/bits/stdint-least.h:
 
-/usr/include/c++/15/vector:
-
 /usr/include/c++/15/variant:
 
 /usr/include/c++/15/utility:
@@ -1083,10 +1087,6 @@ sfml-app: /lib/x86_64-linux-gnu/libX11.so.6 \
 /usr/include/c++/15/bits/stl_raw_storage_iter.h:
 
 /usr/include/c++/15/bits/sstream.tcc:
-
-/usr/include/c++/15/bits/stl_uninitialized.h:
-
-/usr/include/c++/15/bits/shared_ptr_base.h:
 
 /usr/include/c++/15/bits/shared_ptr_atomic.h:
 
@@ -1196,25 +1196,19 @@ CMakeFiles/sfml-app.dir/Visualizer.cpp.o:
 
 /usr/include/SFML/Graphics/Texture.hpp:
 
-/usr/include/locale.h:
-
-/usr/include/x86_64-linux-gnu/bits/pthreadtypes-arch.h:
-
-/usr/include/SFML/Graphics/Export.hpp:
-
 /usr/include/SFML/Graphics/Sprite.hpp:
 
-/usr/include/SFML/Window/Keyboard.hpp:
+/usr/include/SFML/Graphics/Shape.hpp:
 
-/usr/include/linux/types.h:
-
-/home/kali/proyectofinal/Visualizer.h:
+/usr/include/SFML/Graphics/Shader.hpp:
 
 /usr/include/SFML/Graphics/Text.hpp:
 
 /usr/include/linux/posix_types.h:
 
 /usr/include/x86_64-linux-gnu/bits/flt-eval-method.h:
+
+/usr/include/c++/15/vector:
 
 /usr/include/features-time64.h:
 
@@ -1292,6 +1286,10 @@ CMakeFiles/sfml-app.dir/Visualizer.cpp.o:
 
 /usr/include/c++/15/ext/atomicity.h:
 
+/usr/include/SFML/Window/Keyboard.hpp:
+
+/usr/include/linux/types.h:
+
 /usr/include/c++/15/exception:
 
 /usr/include/c++/15/bits/fs_dir.h:
@@ -1352,11 +1350,13 @@ CMakeFiles/sfml-app.dir/Visualizer.cpp.o:
 
 /usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h:
 
-/usr/include/SFML/Graphics/ConvexShape.hpp:
+/usr/include/c++/15/cwctype:
 
-/usr/include/linux/sched/types.h:
+/usr/include/c++/15/bits/shared_ptr_base.h:
 
-/usr/include/c++/15/bits/nested_exception.h:
+/usr/include/c++/15/bits/stl_uninitialized.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/struct_timeval.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/time_t.h:
 
@@ -1384,8 +1384,6 @@ CMakeFiles/sfml-app.dir/Visualizer.cpp.o:
 
 /usr/include/c++/15/bits/istream.tcc:
 
-/usr/include/SFML/Graphics/Shader.hpp:
-
 /lib/x86_64-linux-gnu/libm.so.6:
 
 /usr/include/c++/15/bits/char_traits.h:
@@ -1405,8 +1403,6 @@ CMakeFiles/sfml-app.dir/Visualizer.cpp.o:
 /usr/include/SFML/Window/Joystick.hpp:
 
 /usr/include/x86_64-linux-gnu/c++/15/bits/gthr.h:
-
-/usr/include/c++/15/bits/basic_ios.tcc:
 
 /usr/include/c++/15/tuple:
 
@@ -1458,6 +1454,22 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 
 /usr/include/c++/15/bits/cxxabi_init_exception.h:
 
+/usr/include/c++/15/bits/stl_iterator_base_types.h:
+
+/usr/include/c++/15/iomanip:
+
+/usr/include/SFML/Window/Context.hpp:
+
+/usr/include/x86_64-linux-gnu/sys/single_threaded.h:
+
+/usr/include/stdc-predef.h:
+
+/usr/include/asm-generic/posix_types.h:
+
+/usr/include/c++/15/bits/allocator.h:
+
+/usr/include/c++/15/bit:
+
 /lib/x86_64-linux-gnu/libz.so.1:
 
 /usr/include/pthread.h:
@@ -1479,18 +1491,6 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 /usr/include/c++/15/bits/memory_resource.h:
 
 /usr/include/x86_64-linux-gnu/bits/waitstatus.h:
-
-/usr/include/linux/stddef.h:
-
-/usr/include/c++/15/bits/locale_classes.h:
-
-/usr/include/c++/15/bits/stl_deque.h:
-
-/usr/include/SFML/Graphics/Transform.hpp:
-
-/usr/include/math.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/__FILE.h:
 
 /usr/include/c++/15/bits/specfun.h:
 
@@ -1520,8 +1520,6 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 
 /usr/include/c++/15/bits/localefwd.h:
 
-/usr/include/c++/15/cwctype:
-
 /usr/include/c++/15/bits/erase_if.h:
 
 /usr/include/c++/15/bits/stringfwd.h:
@@ -1529,10 +1527,6 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 /usr/lib/x86_64-linux-gnu/Scrt1.o:
 
 /usr/include/c++/15/tr1/hypergeometric.tcc:
-
-/usr/include/x86_64-linux-gnu/bits/time.h:
-
-/usr/include/x86_64-linux-gnu/bits/select.h:
 
 /usr/include/c++/15/bits/hashtable_policy.h:
 
@@ -1566,9 +1560,11 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 
 /usr/include/c++/15/bits/std_abs.h:
 
-/usr/include/SFML/Graphics/RenderTexture.hpp:
+/usr/include/x86_64-linux-gnu/bits/types/sigset_t.h:
 
-/usr/include/c++/15/debug/assertions.h:
+/usr/include/asm-generic/types.h:
+
+/usr/include/asm-generic/bitsperlong.h:
 
 /usr/include/SFML/Graphics/View.hpp:
 
@@ -1578,25 +1574,49 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 
 /usr/include/c++/15/ostream:
 
+/usr/include/c++/15/bits/basic_ios.tcc:
+
+/usr/include/x86_64-linux-gnu/bits/select.h:
+
+/usr/include/x86_64-linux-gnu/bits/time.h:
+
 /usr/include/features.h:
 
 /usr/include/alloca.h:
 
-/usr/include/stdc-predef.h:
+/usr/include/c++/15/bits/nested_exception.h:
 
-/usr/include/c++/15/bit:
+/usr/include/linux/sched/types.h:
 
-/usr/include/asm-generic/posix_types.h:
+/usr/include/c++/15/debug/assertions.h:
 
-/usr/include/c++/15/bits/allocator.h:
+/usr/include/SFML/Graphics/RenderTexture.hpp:
 
-/usr/include/c++/15/bits/stl_iterator_base_types.h:
+/usr/include/c++/15/bits/locale_classes.h:
 
-/usr/include/c++/15/iomanip:
+/usr/include/linux/stddef.h:
 
-/usr/include/SFML/Window/Context.hpp:
+/home/kali/proyectofinal/Visualizer.h:
 
-/usr/include/x86_64-linux-gnu/sys/single_threaded.h:
+/usr/include/locale.h:
+
+/usr/include/x86_64-linux-gnu/bits/pthreadtypes-arch.h:
+
+/usr/include/SFML/Graphics/Export.hpp:
+
+/usr/include/c++/15/bits/stl_deque.h:
+
+/usr/include/SFML/Graphics/Transform.hpp:
+
+/usr/include/x86_64-linux-gnu/bits/types/__FILE.h:
+
+/usr/include/math.h:
+
+/usr/include/SFML/Graphics/ConvexShape.hpp:
+
+/usr/lib/linux/uapi/x86/asm/errno.h:
+
+/usr/include/stdio.h:
 
 /lib/x86_64-linux-gnu/libmvec.so.1:
 
@@ -1641,6 +1661,12 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 /usr/include/x86_64-linux-gnu/bits/fp-logb.h:
 
 /usr/include/x86_64-linux-gnu/bits/libc-header-start.h:
+
+/usr/include/SFML/Graphics/StencilMode.hpp:
+
+/usr/include/c++/15/bits/basic_ios.h:
+
+/usr/include/x86_64-linux-gnu/bits/locale.h:
 
 /usr/include/c++/15/bits/move.h:
 
@@ -1728,12 +1754,6 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 
 /usr/include/SFML/Graphics/Rect.hpp:
 
-/usr/include/asm-generic/types.h:
-
-/usr/include/asm-generic/bitsperlong.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/sigset_t.h:
-
 /usr/include/SFML/Graphics/PrimitiveType.hpp:
 
 /usr/include/x86_64-linux-gnu/bits/libm-simd-decl-stubs.h:
@@ -1747,12 +1767,6 @@ CMakeFiles/sfml-app.dir/KDTree.cpp.o:
 /usr/include/asm-generic/errno.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/struct_timeval.h:
-
-/usr/include/stdio.h:
-
-/usr/lib/linux/uapi/x86/asm/errno.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h:
 
@@ -1822,8 +1836,6 @@ CMakeFiles/sfml-app.dir/main.cpp.o:
 
 /usr/include/SFML/Graphics/CoordinateType.hpp:
 
-/usr/include/SFML/Graphics/Shape.hpp:
-
 /usr/include/SFML/Graphics/Glsl.hpp:
 
 /home/kali/proyectofinal/KDTree.cpp:
@@ -1839,9 +1851,3 @@ CMakeFiles/sfml-app.dir/main.cpp.o:
 /usr/include/c++/15/bits/parse_numbers.h:
 
 /usr/include/SFML/Graphics/Rect.inl:
-
-/usr/include/c++/15/bits/basic_ios.h:
-
-/usr/include/x86_64-linux-gnu/bits/locale.h:
-
-/usr/include/SFML/Graphics/StencilMode.hpp:

@@ -22,7 +22,8 @@ static sf::String toUtf8(const std::string& str) {
 enum class AnimationType {
     NONE,
     INSERT,
-    SEARCH
+    SEARCH,
+    RANGE_SEARCH
 };
 
 struct AnimationStep {
@@ -45,6 +46,17 @@ struct AnimationState {
     Punto2D searchTarget{0.f, 0.f};
     Punto2D foundNearest{0.f, 0.f};
     bool hasResult = false;
+};
+
+//---------------------- Estado de Búsqueda por Rango ---------------------
+struct RangeSearchState {
+    bool modoActivo = false;
+    bool dibujando = false;
+    sf::Vector2f puntoInicio;
+    sf::Vector2f puntoFin;
+    std::vector<Punto2D> puntosEncontrados;
+    bool tieneResultado = false;
+    Rectangulo rectangulo{0.f, 0.f, 0.f, 0.f};
 };
 
 //---------------------- Configuración de SFML ---------------------_
@@ -269,6 +281,127 @@ static void generateSearchAnimation(KDNode* root, const Punto2D& target, Animati
     }
 }
 
+// Generar animación para búsqueda por rango
+static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect, 
+                                        AnimationState& anim, 
+                                        std::vector<Punto2D>& foundPoints) {
+    anim.type = AnimationType::RANGE_SEARCH;
+    anim.steps.clear();
+    anim.currentStepIndex = -1;
+    anim.stepDuration = 0.5f;
+    anim.autoAdvance = true;
+    anim.paused = false;
+    foundPoints.clear();
+    
+    // Paso inicial
+    AnimationStep startStep;
+    startStep.currentNode = root;
+    startStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+    startStep.isComparison = false;
+    startStep.description = "Iniciando búsqueda por rango [" + 
+                           std::to_string((int)rect.xmin) + "," + std::to_string((int)rect.xmax) + 
+                           "] x [" + std::to_string((int)rect.ymin) + "," + std::to_string((int)rect.ymax) + "]";
+    anim.steps.push_back(startStep);
+    
+    std::function<void(KDNode*, int)> rangeSearchRec = [&](KDNode* node, int depth) {
+        if (!node) return;
+        
+        int axis = depth % 2;
+        
+        // Paso: visitar nodo
+        AnimationStep visitStep;
+        visitStep.currentNode = node;
+        visitStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+        visitStep.axis = axis;
+        visitStep.isComparison = true;
+        visitStep.description = "Visitando nodo (" + std::to_string((int)node->punto.x) + 
+                               ", " + std::to_string((int)node->punto.y) + 
+                               ") - Eje: " + (axis == 0 ? "X" : "Y");
+        anim.steps.push_back(visitStep);
+        
+        // Verificar si el punto está en el rectángulo
+        bool inRange = (node->punto.x >= rect.xmin && node->punto.x <= rect.xmax &&
+                       node->punto.y >= rect.ymin && node->punto.y <= rect.ymax);
+        
+        if (inRange) {
+            AnimationStep foundStep;
+            foundStep.currentNode = node;
+            foundStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+            foundStep.isLeaf = true;
+            foundStep.description = "✓ Punto DENTRO del rectángulo → agregar a resultados";
+            anim.steps.push_back(foundStep);
+            foundPoints.push_back(node->punto);
+        } else {
+            AnimationStep notFoundStep;
+            notFoundStep.currentNode = node;
+            notFoundStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+            notFoundStep.isComparison = false;
+            notFoundStep.description = "✗ Punto FUERA del rectángulo";
+            anim.steps.push_back(notFoundStep);
+        }
+        
+        // Decidir qué ramas explorar
+        float nodeVal = (axis == 0) ? node->punto.x : node->punto.y;
+        float rectMin = (axis == 0) ? rect.xmin : rect.ymin;
+        float rectMax = (axis == 0) ? rect.xmax : rect.ymax;
+        
+        bool exploreLeft = (nodeVal >= rectMin);
+        bool exploreRight = (nodeVal <= rectMax);
+        
+        if (exploreLeft && node->izquierdo) {
+            AnimationStep leftStep;
+            leftStep.currentNode = node;
+            leftStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+            leftStep.axis = axis;
+            leftStep.isComparison = false;
+            leftStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
+                                 " intersecta rango → Explorar rama IZQUIERDA";
+            anim.steps.push_back(leftStep);
+            rangeSearchRec(node->izquierdo, depth + 1);
+        } else if (node->izquierdo) {
+            AnimationStep pruneLeftStep;
+            pruneLeftStep.currentNode = node;
+            pruneLeftStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+            pruneLeftStep.axis = axis;
+            pruneLeftStep.isComparison = false;
+            pruneLeftStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
+                                       " NO intersecta → PODAR rama izquierda";
+            anim.steps.push_back(pruneLeftStep);
+        }
+        
+        if (exploreRight && node->derecho) {
+            AnimationStep rightStep;
+            rightStep.currentNode = node;
+            rightStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+            rightStep.axis = axis;
+            rightStep.isComparison = false;
+            rightStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
+                                  " intersecta rango → Explorar rama DERECHA";
+            anim.steps.push_back(rightStep);
+            rangeSearchRec(node->derecho, depth + 1);
+        } else if (node->derecho) {
+            AnimationStep pruneRightStep;
+            pruneRightStep.currentNode = node;
+            pruneRightStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+            pruneRightStep.axis = axis;
+            pruneRightStep.isComparison = false;
+            pruneRightStep.description = std::string("Plano ") + (axis == 0 ? "X=" : "Y=") + std::to_string((int)nodeVal) + 
+                                        " NO intersecta → PODAR rama derecha";
+            anim.steps.push_back(pruneRightStep);
+        }
+    };
+    
+    rangeSearchRec(root, 0);
+    
+    // Paso final
+    AnimationStep finalStep;
+    finalStep.currentNode = nullptr;
+    finalStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
+    finalStep.isLeaf = false;
+    finalStep.description = "COMPLETADO: Encontrados " + std::to_string(foundPoints.size()) + " puntos";
+    anim.steps.push_back(finalStep);
+}
+
 static sf::Vector2f mapToPlane(const Punto2D& p) {
     float normX = p.x / MAX_COORD; // 0..1
     float normY = p.y / MAX_COORD; // 0..1
@@ -314,7 +447,7 @@ static void drawPointLabel(sf::RenderWindow& window, const Punto2D& p, const sf:
     window.draw(text);
 }
 
-static void drawAxesAndGrid(sf::RenderWindow& window) {
+static void drawAxesAndGrid(sf::RenderWindow& window, const sf::Font* font = nullptr) {
     sf::RectangleShape planeBg({PLANE_WIDTH, PLANE_HEIGHT});
     planeBg.setPosition(sf::Vector2f(PLANE_ORIGIN_X, PLANE_ORIGIN_Y));
     planeBg.setFillColor(sf::Color(30, 30, 30));
@@ -356,6 +489,60 @@ static void drawAxesAndGrid(sf::RenderWindow& window) {
     ejeY[1].position = sf::Vector2f(PLANE_ORIGIN_X, PLANE_ORIGIN_Y + PLANE_HEIGHT);
     ejeY[0].color = ejeY[1].color = sf::Color::White;
     window.draw(ejeY);
+    
+    // Dibujar etiquetas en los ejes
+    if (font) {
+        // Etiquetas en eje X (cada 20 unidades)
+        for (float x = 0; x <= MAX_COORD; x += 20.f) {
+            float normX = x / MAX_COORD;
+            float screenX = PLANE_ORIGIN_X + normX * PLANE_WIDTH;
+            
+            sf::Text label(*font, std::to_string((int)x), 10);
+            label.setFillColor(sf::Color(180, 180, 180));
+            sf::FloatRect bounds = label.getLocalBounds();
+            label.setPosition(sf::Vector2f(screenX - bounds.size.x / 2.f, PLANE_ORIGIN_Y + PLANE_HEIGHT + 5.f));
+            window.draw(label);
+            
+            // Marca en el eje
+            sf::VertexArray tick(sf::PrimitiveType::Lines, 2);
+            tick[0].position = sf::Vector2f(screenX, PLANE_ORIGIN_Y + PLANE_HEIGHT);
+            tick[1].position = sf::Vector2f(screenX, PLANE_ORIGIN_Y + PLANE_HEIGHT + 5.f);
+            tick[0].color = tick[1].color = sf::Color::White;
+            window.draw(tick);
+        }
+        
+        // Etiquetas en eje Y (cada 20 unidades)
+        for (float y = 0; y <= MAX_COORD; y += 20.f) {
+            float normY = y / MAX_COORD;
+            float screenY = PLANE_ORIGIN_Y + (1.f - normY) * PLANE_HEIGHT;
+            
+            sf::Text label(*font, std::to_string((int)y), 10);
+            label.setFillColor(sf::Color(180, 180, 180));
+            sf::FloatRect bounds = label.getLocalBounds();
+            label.setPosition(sf::Vector2f(PLANE_ORIGIN_X - bounds.size.x - 8.f, screenY - bounds.size.y / 2.f));
+            window.draw(label);
+            
+            // Marca en el eje
+            sf::VertexArray tick(sf::PrimitiveType::Lines, 2);
+            tick[0].position = sf::Vector2f(PLANE_ORIGIN_X, screenY);
+            tick[1].position = sf::Vector2f(PLANE_ORIGIN_X - 5.f, screenY);
+            tick[0].color = tick[1].color = sf::Color::White;
+            window.draw(tick);
+        }
+        
+        // Etiquetas "X" e "Y" en los ejes
+        sf::Text labelX(*font, "X", 14);
+        labelX.setFillColor(sf::Color::White);
+        labelX.setStyle(sf::Text::Bold);
+        labelX.setPosition(sf::Vector2f(PLANE_ORIGIN_X + PLANE_WIDTH + 10.f, PLANE_ORIGIN_Y + PLANE_HEIGHT - 10.f));
+        window.draw(labelX);
+        
+        sf::Text labelY(*font, "Y", 14);
+        labelY.setFillColor(sf::Color::White);
+        labelY.setStyle(sf::Text::Bold);
+        labelY.setPosition(sf::Vector2f(PLANE_ORIGIN_X + 5.f, PLANE_ORIGIN_Y - 20.f));
+        window.draw(labelY);
+    }
 }
 
 static void drawKDLinesRec(sf::RenderWindow& window, KDNode* nodo, const Region& region) {
@@ -568,7 +755,14 @@ static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& an
     window.draw(panel);
     
     // Título del algoritmo
-    sf::String title = (anim.type == AnimationType::INSERT) ? toUtf8("ANIMACIÓN: INSERCIÓN") : toUtf8("ANIMACIÓN: BÚSQUEDA NEAREST NEIGHBOR");
+    sf::String title;
+    if (anim.type == AnimationType::INSERT) {
+        title = toUtf8("ANIMACIÓN: INSERCIÓN");
+    } else if (anim.type == AnimationType::SEARCH) {
+        title = toUtf8("ANIMACIÓN: BÚSQUEDA NEAREST NEIGHBOR");
+    } else if (anim.type == AnimationType::RANGE_SEARCH) {
+        title = toUtf8("ANIMACIÓN: BÚSQUEDA POR RANGO");
+    }
     sf::Text titleText(*font, title, 16);
     titleText.setFillColor(sf::Color::Yellow);
     titleText.setPosition({20.f, panelY + 10.f});
@@ -604,10 +798,6 @@ static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& an
 }
 
 void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
-    // Configurar locale para soporte UTF-8
-    std::locale::global(std::locale("es_ES.UTF-8"));
-    std::cout.imbue(std::locale());
-    
     sf::RenderWindow window(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), toUtf8("Visualizador KD-Tree"));
 
     // Cargar fuente para labels si está disponible
@@ -645,17 +835,24 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
     sf::RectangleShape buttonSearch({BUTTON_W, BUTTON_H});
     buttonSearch.setPosition({button.getPosition().x + BUTTON_W + INPUT_MARGIN, PLANE_ORIGIN_Y + INPUT_MARGIN + INPUT_DOWN_OFFSET});
     buttonSearch.setFillColor(sf::Color(80,120,200)); buttonSearch.setOutlineThickness(2.f); buttonSearch.setOutlineColor(sf::Color(60,90,160));
+    
+    // Range button (Rango) placed to the right of the Search button
+    sf::RectangleShape buttonRange({BUTTON_W, BUTTON_H});
+    buttonRange.setPosition({buttonSearch.getPosition().x + BUTTON_W + INPUT_MARGIN, PLANE_ORIGIN_Y + INPUT_MARGIN + INPUT_DOWN_OFFSET});
+    buttonRange.setFillColor(sf::Color(200,100,80)); buttonRange.setOutlineThickness(2.f); buttonRange.setOutlineColor(sf::Color(160,80,60));
 
-    std::unique_ptr<sf::Text> textX, textY, textBtn, textSearch, labelX, labelY;
+    std::unique_ptr<sf::Text> textX, textY, textBtn, textSearch, textRange, labelX, labelY;
     if (fontPtr) {
         textX = std::make_unique<sf::Text>(*fontPtr, "", 14);
         textY = std::make_unique<sf::Text>(*fontPtr, "", 14);
         textBtn = std::make_unique<sf::Text>(*fontPtr, toUtf8("Añadir"), 14);
         textSearch = std::make_unique<sf::Text>(*fontPtr, toUtf8("Buscar"), 14);
+        textRange = std::make_unique<sf::Text>(*fontPtr, toUtf8("Rango"), 14);
         labelX = std::make_unique<sf::Text>(*fontPtr, "X:", 12);
         labelY = std::make_unique<sf::Text>(*fontPtr, "Y:", 12);
         textX->setFillColor(sf::Color::White); textY->setFillColor(sf::Color::White); textBtn->setFillColor(sf::Color::Black);
         textSearch->setFillColor(sf::Color::Black);
+        textRange->setFillColor(sf::Color::Black);
         labelX->setFillColor(sf::Color::White); labelY->setFillColor(sf::Color::White);
     }
 
@@ -665,6 +862,9 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
     
     // Estado de animación
     AnimationState animState;
+    
+    // Estado de búsqueda por rango
+    RangeSearchState rangeState;
 
     while (window.isOpen()) {
         // Avance automático de animación
@@ -677,6 +877,7 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                         hasNearest = true;
                         nearestPoint = animState.foundNearest;
                     }
+                    // Para RANGE_SEARCH, los resultados ya están en rangeState.puntosEncontrados
                     animState.type = AnimationType::NONE;
                     animState.currentStepIndex = -1;
                 } else {
@@ -698,6 +899,29 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                         window.close();
                     }
                     break;
+                }
+                
+                // Tecla R para resetear visualizaciones
+                if (key->scancode == sf::Keyboard::Scancode::R) {
+                    // Cancelar cualquier animación
+                    animState.type = AnimationType::NONE;
+                    animState.currentStepIndex = -1;
+                    animState.steps.clear();
+                    
+                    // Limpiar resultado de búsqueda nearest
+                    hasNearest = false;
+                    
+                    // Limpiar estado de búsqueda por rango
+                    rangeState.modoActivo = false;
+                    rangeState.dibujando = false;
+                    rangeState.tieneResultado = false;
+                    rangeState.puntosEncontrados.clear();
+                    
+                    // Limpiar inputs
+                    activeX = false;
+                    activeY = false;
+                    
+                    std::cout << "Reset: Se limpiaron todas las visualizaciones\n";
                 }
                 
                 // Controles de animación
@@ -801,16 +1025,72 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                             }
                         } catch(...) { }
                         activeX = activeY = false;
+                    } else if (buttonRange.getGlobalBounds().contains(mpos)) {
+                        // Activar/desactivar modo de búsqueda por rango
+                        rangeState.modoActivo = !rangeState.modoActivo;
+                        if (!rangeState.modoActivo) {
+                            // Limpiar estado al desactivar
+                            rangeState.dibujando = false;
+                            rangeState.tieneResultado = false;
+                            rangeState.puntosEncontrados.clear();
+                        }
+                        activeX = activeY = false;
                     } else {
-                        // click in plane -> insert point by coordinates
+                        // click in plane
                         int mx = mouse->position.x; int my = mouse->position.y;
                         if (mx >= (int)PLANE_ORIGIN_X && mx <= (int)(PLANE_ORIGIN_X + PLANE_WIDTH)
                             && my >= (int)PLANE_ORIGIN_Y && my <= (int)(PLANE_ORIGIN_Y + PLANE_HEIGHT)) {
-                            float realX = (float)(mx - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
-                            float realY = (1.f - (float)(my - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
-                            Punto2D p{realX, realY}; tree.insert(p); puntos.push_back(p);
+                            
+                            if (rangeState.modoActivo) {
+                                // Iniciar dibujo de rectángulo
+                                rangeState.dibujando = true;
+                                rangeState.puntoInicio = mpos;
+                                rangeState.puntoFin = mpos;
+                                rangeState.tieneResultado = false;
+                                rangeState.puntosEncontrados.clear();
+                            } else {
+                                // Insertar punto por coordenadas
+                                float realX = (float)(mx - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
+                                float realY = (1.f - (float)(my - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
+                                Punto2D p{realX, realY}; tree.insert(p); puntos.push_back(p);
+                            }
                         }
                         activeX = activeY = false;
+                    }
+                }
+            }
+            
+            if (const auto* mouse = event->getIf<sf::Event::MouseMoved>()) {
+                if (rangeState.dibujando) {
+                    // Actualizar punto final mientras se dibuja
+                    rangeState.puntoFin = sf::Vector2f((float)mouse->position.x, (float)mouse->position.y);
+                }
+            }
+            
+            if (const auto* mouse = event->getIf<sf::Event::MouseButtonReleased>()) {
+                if (mouse->button == sf::Mouse::Button::Left && rangeState.dibujando) {
+                    rangeState.dibujando = false;
+                    
+                    // Convertir coordenadas de pantalla a coordenadas del plano
+                    float x1 = (rangeState.puntoInicio.x - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
+                    float y1 = (1.f - (rangeState.puntoInicio.y - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
+                    float x2 = (rangeState.puntoFin.x - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
+                    float y2 = (1.f - (rangeState.puntoFin.y - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
+                    
+                    // Crear rectángulo (min/max para que funcione en cualquier dirección)
+                    rangeState.rectangulo.xmin = std::min(x1, x2);
+                    rangeState.rectangulo.xmax = std::max(x1, x2);
+                    rangeState.rectangulo.ymin = std::min(y1, y2);
+                    rangeState.rectangulo.ymax = std::max(y1, y2);
+                    
+                    // Iniciar animación de búsqueda por rango
+                    if (tree.getRoot() != nullptr) {
+                        generateRangeSearchAnimation(tree.getRoot(), rangeState.rectangulo, 
+                                                    animState, rangeState.puntosEncontrados);
+                        animState.currentStepIndex = 0;
+                        animState.stepClock.restart();
+                        animState.paused = false;
+                        rangeState.tieneResultado = true;
                     }
                 }
             }
@@ -818,7 +1098,7 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
 
         window.clear(sf::Color::Black);
 
-        drawAxesAndGrid(window);
+        drawAxesAndGrid(window, fontPtr);
         drawKDLines(window, tree.getRoot());
 
         // draw UI
@@ -831,21 +1111,91 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
             textBtn->setPosition(sf::Vector2f(button.getPosition().x + (BUTTON_W - tbb.size.x)/2.f, button.getPosition().y + (BUTTON_H - tbb.size.y)/2.f));
             sf::FloatRect tsb = textSearch->getLocalBounds();
             textSearch->setPosition(sf::Vector2f(buttonSearch.getPosition().x + (BUTTON_W - tsb.size.x)/2.f, buttonSearch.getPosition().y + (BUTTON_H - tsb.size.y)/2.f));
+            sf::FloatRect trb = textRange->getLocalBounds();
+            textRange->setPosition(sf::Vector2f(buttonRange.getPosition().x + (BUTTON_W - trb.size.x)/2.f, buttonRange.getPosition().y + (BUTTON_H - trb.size.y)/2.f));
+            
+            // Cambiar color del botón Rango si está activo
+            if (rangeState.modoActivo) {
+                buttonRange.setFillColor(sf::Color(255, 150, 100));
+            } else {
+                buttonRange.setFillColor(sf::Color(200, 100, 80));
+            }
+            
             // center labels
             sf::FloatRect lbx = labelX->getLocalBounds(); sf::FloatRect lby = labelY->getLocalBounds();
             labelX->setPosition(sf::Vector2f(boxX.getPosition().x + (INPUT_W - lbx.size.x)/2.f, boxX.getPosition().y - 8.f));
             labelY->setPosition(sf::Vector2f(boxY.getPosition().x + (INPUT_W - lby.size.x)/2.f, boxY.getPosition().y - 8.f));
-            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch);
-            window.draw(*labelX); window.draw(*labelY); window.draw(*textX); window.draw(*textY); window.draw(*textBtn); window.draw(*textSearch);
+            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch); window.draw(buttonRange);
+            window.draw(*labelX); window.draw(*labelY); window.draw(*textX); window.draw(*textY); window.draw(*textBtn); window.draw(*textSearch); window.draw(*textRange);
         } else {
-            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch);
+            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch); window.draw(buttonRange);
         }
 
         for (const auto& p : puntos) { drawPoint(window, p, sf::Color::Red); drawPointLabel(window, p, fontPtr); }
         
-        // Resaltar punto objetivo durante animación
-        if (animState.type != AnimationType::NONE && animState.currentStepIndex >= 0 && 
-            animState.currentStepIndex < (int)animState.steps.size()) {
+        // Dibujar rectángulo de búsqueda por rango
+        if (rangeState.modoActivo || animState.type == AnimationType::RANGE_SEARCH) {
+            if (rangeState.dibujando) {
+                // Dibujar rectángulo mientras se arrastra
+                sf::Vector2f topLeft(
+                    std::min(rangeState.puntoInicio.x, rangeState.puntoFin.x),
+                    std::min(rangeState.puntoInicio.y, rangeState.puntoFin.y)
+                );
+                sf::Vector2f size(
+                    std::abs(rangeState.puntoFin.x - rangeState.puntoInicio.x),
+                    std::abs(rangeState.puntoFin.y - rangeState.puntoInicio.y)
+                );
+                sf::RectangleShape rect(size);
+                rect.setPosition(topLeft);
+                rect.setFillColor(sf::Color(100, 150, 255, 50)); // Azul translúcido
+                rect.setOutlineThickness(2.f);
+                rect.setOutlineColor(sf::Color(100, 150, 255, 200));
+                window.draw(rect);
+            } else if (rangeState.tieneResultado || animState.type == AnimationType::RANGE_SEARCH) {
+                // Dibujar rectángulo final con resultados
+                sf::Vector2f topLeft(
+                    std::min(rangeState.puntoInicio.x, rangeState.puntoFin.x),
+                    std::min(rangeState.puntoInicio.y, rangeState.puntoFin.y)
+                );
+                sf::Vector2f size(
+                    std::abs(rangeState.puntoFin.x - rangeState.puntoInicio.x),
+                    std::abs(rangeState.puntoFin.y - rangeState.puntoInicio.y)
+                );
+                sf::RectangleShape rect(size);
+                rect.setPosition(topLeft);
+                rect.setFillColor(sf::Color(100, 255, 100, 30)); // Verde translúcido
+                rect.setOutlineThickness(2.f);
+                rect.setOutlineColor(sf::Color(100, 255, 100, 200));
+                window.draw(rect);
+                
+                // Resaltar puntos encontrados
+                for (const auto& p : rangeState.puntosEncontrados) {
+                    sf::Vector2f pos = mapToPlane(p);
+                    float r = 8.f;
+                    sf::CircleShape c(r);
+                    c.setOrigin(sf::Vector2f(r, r));
+                    c.setPosition(pos);
+                    c.setFillColor(sf::Color(100, 255, 100)); // Verde brillante
+                    c.setOutlineThickness(2.f);
+                    c.setOutlineColor(sf::Color::White);
+                    window.draw(c);
+                }
+                
+                // Mostrar contador de resultados
+                if (fontPtr) {
+                    std::string lab = "Encontrados: " + std::to_string(rangeState.puntosEncontrados.size());
+                    sf::Text t(*fontPtr, toUtf8(lab));
+                    t.setCharacterSize(14);
+                    t.setFillColor(sf::Color::White);
+                    t.setPosition(sf::Vector2f(PLANE_ORIGIN_X + 10.f, PLANE_ORIGIN_Y + PLANE_HEIGHT - 30.f));
+                    window.draw(t);
+                }
+            }
+        }
+        
+        // Resaltar punto objetivo durante animación (solo para INSERT y SEARCH)
+        if ((animState.type == AnimationType::INSERT || animState.type == AnimationType::SEARCH) && 
+            animState.currentStepIndex >= 0 && animState.currentStepIndex < (int)animState.steps.size()) {
             const auto& step = animState.steps[animState.currentStepIndex];
             sf::Vector2f targetPos = mapToPlane(step.targetPoint);
             

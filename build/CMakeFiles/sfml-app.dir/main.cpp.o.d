@@ -1,7 +1,6 @@
 CMakeFiles/sfml-app.dir/main.cpp.o: /home/kali/proyectofinal/main.cpp \
  /usr/include/stdc-predef.h /home/kali/proyectofinal/KDTree.h \
- /home/kali/proyectofinal/Visualizer.h /usr/include/c++/15/vector \
- /usr/include/c++/15/bits/requires_hosted.h \
+ /usr/include/c++/15/vector /usr/include/c++/15/bits/requires_hosted.h \
  /usr/include/x86_64-linux-gnu/c++/15/bits/c++config.h \
  /usr/include/x86_64-linux-gnu/c++/15/bits/os_defines.h \
  /usr/include/features.h /usr/include/features-time64.h \
@@ -52,7 +51,8 @@ CMakeFiles/sfml-app.dir/main.cpp.o: /home/kali/proyectofinal/main.cpp \
  /usr/lib/gcc/x86_64-linux-gnu/15/include/stddef.h \
  /usr/include/c++/15/bits/uses_allocator.h \
  /usr/include/c++/15/bits/uses_allocator_args.h /usr/include/c++/15/tuple \
- /usr/include/SFML/Graphics.hpp /usr/include/SFML/Graphics/BlendMode.hpp \
+ /home/kali/proyectofinal/Visualizer.h /usr/include/SFML/Graphics.hpp \
+ /usr/include/SFML/Graphics/BlendMode.hpp \
  /usr/include/SFML/Graphics/Export.hpp /usr/include/SFML/Config.hpp \
  /usr/include/SFML/Graphics/CircleShape.hpp \
  /usr/include/SFML/Graphics/Shape.hpp \
@@ -262,4 +262,4 @@ CMakeFiles/sfml-app.dir/main.cpp.o: /home/kali/proyectofinal/main.cpp \
  /usr/include/SFML/System/FileInputStream.hpp \
  /usr/include/SFML/System/InputStream.hpp \
  /usr/include/SFML/System/MemoryInputStream.hpp \
- /usr/include/SFML/System/Sleep.hpp
+ /usr/include/SFML/System/Sleep.hpp /usr/include/c++/15/iostream

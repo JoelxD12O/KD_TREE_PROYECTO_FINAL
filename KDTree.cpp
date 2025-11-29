@@ -37,88 +37,144 @@ KDNode* KDTree::getRoot() const {
     return root;
 }
 
-// ============ NEAREST NEIGHBOR: Implementación  al pseudocódigo ============
+// ============ VECINO MAS CERCANO: Implementacion fiel al pseudocodigo ============
 
-// Función auxiliar: distancia al cuadrado entre dos puntos
-static inline float distSquared(const Punto2D& a, const Punto2D& b) {
-    float dx = a.x - b.x;
-    float dy = a.y - b.y;
-    return dx*dx + dy*dy;
+// Funcion auxiliar: distancia al cuadrado entre dos puntos
+static inline float distanciaCuadrado(const Punto2D& a, const Punto2D& b) {
+    float diferenciaX = a.x - b.x;
+    float diferenciaY = a.y - b.y;
+    return diferenciaX * diferenciaX + diferenciaY * diferenciaY;
 }
 
-// Función auxiliar: devuelve el nodo más cercano al target entre temp y current
-// (si temp es null, devuelve current; si current es null, devuelve temp)
-static KDNode* closest(const Punto2D& target, KDNode* temp, KDNode* current) {
-    if (!temp) return current;
-    if (!current) return temp;
+// Funcion auxiliar: devuelve el nodo mas cercano al objetivo entre temporal y actual
+// (si temporal es null, devuelve actual; si actual es null, devuelve temporal)
+static KDNode* masCercano(const Punto2D& objetivo, KDNode* temporal, KDNode* actual) {
+    if (!temporal) return actual;
+    if (!actual) return temporal;
     
-    float distTemp = distSquared(target, temp->punto);
-    float distCurrent = distSquared(target, current->punto);
+    float distanciaTemporal = distanciaCuadrado(objetivo, temporal->punto);
+    float distanciaActual = distanciaCuadrado(objetivo, actual->punto);
     
-    return (distTemp < distCurrent) ? temp : current;
+    return (distanciaTemporal < distanciaActual) ? temporal : actual;
 }
 
-// Algoritmo recursivo de nearest neighbor en KD-tree
-// Devuelve el nodo del árbol cuyo punto está más cerca de 'target'
-static KDNode* nearestNeighbor(KDNode* root, const Punto2D& target, int depth) {
-    if (root == nullptr)
+// Algoritmo recursivo de vecino mas cercano en KD-tree
+// Devuelve el nodo del arbol cuyo punto esta mas cerca de 'objetivo'
+static KDNode* vecinoMasCercano(KDNode* raiz, const Punto2D& objetivo, int profundidad) {
+    if (raiz == nullptr)
         return nullptr;
 
-    // 2️⃣ Elegir la rama principal según el eje (discriminador)
-    // depth % 2: si depth es par → eje X (0), si es impar → eje Y (1)
-    int axis = depth % 2;
-    KDNode* nextBranch = nullptr;
-    KDNode* otherBranch = nullptr;
+    // Paso 2: Elegir la rama principal segun el eje (discriminador)
+    // profundidad % 2: si profundidad es par -> eje X (0), si es impar -> eje Y (1)
+    int eje = profundidad % 2;
+    KDNode* ramaSiguiente = nullptr;
+    KDNode* ramaOpuesta = nullptr;
     
-    if (axis == 0) { // Comparar por X
-        if (target.x < root->punto.x) {
-            nextBranch = root->izquierdo;
-            otherBranch = root->derecho;
+    if (eje == 0) { // Comparar por X
+        if (objetivo.x < raiz->punto.x) {
+            ramaSiguiente = raiz->izquierdo;
+            ramaOpuesta = raiz->derecho;
         } else {
-            nextBranch = root->derecho;
-            otherBranch = root->izquierdo;
+            ramaSiguiente = raiz->derecho;
+            ramaOpuesta = raiz->izquierdo;
         }
     } else { // Comparar por Y
-        if (target.y < root->punto.y) {
-            nextBranch = root->izquierdo;
-            otherBranch = root->derecho;
+        if (objetivo.y < raiz->punto.y) {
+            ramaSiguiente = raiz->izquierdo;
+            ramaOpuesta = raiz->derecho;
         } else {
-            nextBranch = root->derecho;
-            otherBranch = root->izquierdo;
+            ramaSiguiente = raiz->derecho;
+            ramaOpuesta = raiz->izquierdo;
         }
     }
 
-    // 3️⃣ Búsqueda recursiva por la rama principal (lado "correcto")
-    KDNode* temp = nearestNeighbor(nextBranch, target, depth + 1);
+    // Paso 3: Busqueda recursiva por la rama principal (lado "correcto")
+    KDNode* temporal = vecinoMasCercano(ramaSiguiente, objetivo, profundidad + 1);
 
-    // 4️⃣ Determinar el mejor entre lo encontrado y el nodo actual
-    KDNode* best = closest(target, temp, root);
+    // Paso 4: Determinar el mejor entre lo encontrado y el nodo actual
+    KDNode* mejor = masCercano(objetivo, temporal, raiz);
 
-    // 5️⃣ Calcular radios r² y r'
+    // Paso 5: Calcular radios r² y r'
     // r² = distancia al mejor punto encontrado hasta ahora
-    float radiusSquared = distSquared(target, best->punto);
+    float radioCuadrado = distanciaCuadrado(objetivo, mejor->punto);
 
-    // r' = distancia desde el target al plano divisor (en el eje correspondiente)
-    float dist = (axis == 0) ? (target.x - root->punto.x) : (target.y - root->punto.y);
+    // r' = distancia desde el objetivo al plano divisor (en el eje correspondiente)
+    float distanciaPlano = (eje == 0) ? (objetivo.x - raiz->punto.x) : (objetivo.y - raiz->punto.y);
 
-    // 6️⃣ ¿Buscar o no buscar la otra rama?
-    // Si el círculo de radio r intersecta el plano divisor,
-    // entonces el otro lado del árbol podría tener un punto mejor.
-    if (radiusSquared >= dist * dist) {
-        temp = nearestNeighbor(otherBranch, target, depth + 1);
-        best = closest(target, temp, best);
+    // Paso 6: Buscar o no buscar la otra rama (poda)
+    // Si el circulo de radio r intersecta el plano divisor,
+    // entonces el otro lado del arbol podria tener un punto mejor.
+    if (radioCuadrado >= distanciaPlano * distanciaPlano) {
+        temporal = vecinoMasCercano(ramaOpuesta, objetivo, profundidad + 1);
+        mejor = masCercano(objetivo, temporal, mejor);
     }
 
-    // 7️⃣ Devolver el mejor punto final
-    return best;
+    // Paso 7: Devolver el mejor punto final
+    return mejor;
 }
 
-// Método público: encuentra el punto más cercano a 'target' en el KD-tree
-Punto2D KDTree::nearest(const Punto2D& target) const {
+// Metodo publico: encuentra el punto mas cercano a 'objetivo' en el KD-tree
+Punto2D KDTree::nearest(const Punto2D& objetivo) const {
     if (!root) return {0.f, 0.f};
     
-    KDNode* result = nearestNeighbor(root, target, 0);
+    KDNode* resultado = vecinoMasCercano(root, objetivo, 0);
     
-    if (result) return result->punto;
+    if (resultado) return resultado->punto;
     return {0.f, 0.f};
+}
+
+// ============ BUSQUEDA POR RANGO: Busqueda dentro de un rectangulo ============
+
+// Funcion recursiva que explora el arbol buscando puntos dentro del rectangulo
+void KDTree::rangeSearchRec(KDNode* nodo,
+                            const Rectangulo& rectangulo,
+                            int profundidad,
+                            std::vector<Punto2D>& resultado) const
+{
+    if (nodo == nullptr) return;
+
+    const Punto2D& puntoNodo = nodo->punto;
+
+    // Paso 1: Verificar si el punto del nodo esta dentro del rectangulo
+    if (puntoNodo.x >= rectangulo.xmin && puntoNodo.x <= rectangulo.xmax &&
+        puntoNodo.y >= rectangulo.ymin && puntoNodo.y <= rectangulo.ymax) {
+        resultado.push_back(puntoNodo);
+    }
+
+    int eje = profundidad % 2;
+
+    if (eje == 0) {
+        // Nivel X: linea vertical en x = puntoNodo.x
+        // El espacio se divide en: izquierda (x < puntoNodo.x) y derecha (x >= puntoNodo.x)
+
+        // El rectangulo toca o esta a la izquierda del plano divisor
+        if (rectangulo.xmin <= puntoNodo.x) {
+            rangeSearchRec(nodo->izquierdo, rectangulo, profundidad + 1, resultado);
+        }
+
+        // El rectangulo toca o esta a la derecha del plano divisor
+        if (rectangulo.xmax >= puntoNodo.x) {
+            rangeSearchRec(nodo->derecho, rectangulo, profundidad + 1, resultado);
+        }
+    } else {
+        // Nivel Y: linea horizontal en y = puntoNodo.y
+        // El espacio se divide en: abajo (y < puntoNodo.y) y arriba (y >= puntoNodo.y)
+
+        // El rectangulo toca o esta abajo del plano divisor
+        if (rectangulo.ymin <= puntoNodo.y) {
+            rangeSearchRec(nodo->izquierdo, rectangulo, profundidad + 1, resultado);
+        }
+
+        // El rectangulo toca o esta arriba del plano divisor
+        if (rectangulo.ymax >= puntoNodo.y) {
+            rangeSearchRec(nodo->derecho, rectangulo, profundidad + 1, resultado);
+        }
+    }
+}
+
+// Metodo publico: devuelve todos los puntos dentro del rectangulo
+std::vector<Punto2D> KDTree::rangeSearch(const Rectangulo& rectangulo) const {
+    std::vector<Punto2D> resultado;
+    rangeSearchRec(root, rectangulo, 0, resultado);
+    return resultado;
 }
