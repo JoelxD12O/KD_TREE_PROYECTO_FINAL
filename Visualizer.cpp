@@ -10,6 +10,9 @@
 #include <locale>
 #include <codecvt>
 #include <chrono>
+#include <random>
+#include <algorithm>
+#include <cstdint>
 
 // Reuse KDTree types: Punto2D, KDNode, KDTree
 
@@ -62,23 +65,24 @@ struct RangeSearchState {
 };
 
 //---------------------- Configuración de SFML ---------------------_
-const int WINDOW_WIDTH  = 1000;
-const int WINDOW_HEIGHT = 600;
+// Valores por defecto (se recalculan en runtime si abrimos fullscreen)
+static int WINDOW_WIDTH  = 1000;
+static int WINDOW_HEIGHT = 600;
 
-// Panel izquierdo para el plano cartesiano
-const float PLANE_WIDTH  = 600.f;
-const float PLANE_HEIGHT = 600.f;
-const float PLANE_ORIGIN_X = 0.f;
-const float PLANE_ORIGIN_Y = 0.f;
+// Panel izquierdo para el plano cartesiano (se actualizarán según la resolución)
+static float PLANE_WIDTH  = 600.f;
+static float PLANE_HEIGHT = 600.f;
+static float PLANE_ORIGIN_X = 0.f;
+static float PLANE_ORIGIN_Y = 0.f;
 
 // Rango máximo de coordenadas reales (como el ejemplo del libro)
 const float MAX_COORD = 128.f;
 
 // Panel derecho: árbol
-const float TREE_ORIGIN_X   = PLANE_WIDTH;           // empieza donde acaba el plano
+static float TREE_ORIGIN_X   = PLANE_WIDTH;           // empieza donde acaba el plano
 const float TREE_PADDING_X  = 20.f;
 const float TREE_PADDING_Y  = 40.f;
-const float TREE_WIDTH      = WINDOW_WIDTH - TREE_ORIGIN_X - TREE_PADDING_X;
+static float TREE_WIDTH      = WINDOW_WIDTH - TREE_ORIGIN_X - TREE_PADDING_X;
 const float TREE_LEVEL_H    = 80.f;                  // separación vertical entre niveles
 
 // Region struct used by KD drawing
@@ -423,10 +427,26 @@ static sf::Vector2f mapToPlane(float x, float y) {
     return {screenX, screenY};
 }
 
-static void drawPoint(sf::RenderWindow& window, const Punto2D& p, sf::Color color = sf::Color::Red) {
+// Mapea edad (20..90) a un color (azul->rojo)
+static sf::Color mapAgeToColor(float age) {
+    float t = (age - 20.f) / (90.f - 20.f);
+    t = std::max(0.f, std::min(1.f, t));
+    uint8_t r = (uint8_t)std::round((0.2f + 0.8f * t) * 255.f);
+    uint8_t g = (uint8_t)std::round((0.2f + 0.2f * (1.f - t)) * 255.f);
+    uint8_t b = (uint8_t)std::round((0.8f - 0.8f * t) * 255.f);
+    return sf::Color(r, g, b);
+}
+
+// Mapea edad a radio en pixeles
+static float mapAgeToRadius(float age) {
+    float t = (age - 20.f) / (90.f - 20.f);
+    t = std::max(0.f, std::min(1.f, t));
+    return 4.f + t * 6.f; // radio entre 4 y 10
+}
+
+static void drawPoint(sf::RenderWindow& window, const Punto2D& p, sf::Color color = sf::Color::Red, float radius = 5.f) {
     sf::Vector2f pos = mapToPlane(p);
 
-    float radius = 5.f;
     sf::CircleShape circle(radius);
     circle.setFillColor(color);
     circle.setOrigin(sf::Vector2f(radius, radius));
@@ -751,7 +771,7 @@ static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& an
     
     // Panel de información en la parte inferior
     float panelY = WINDOW_HEIGHT - 80.f;
-    sf::RectangleShape panel({WINDOW_WIDTH, 80.f});
+    sf::RectangleShape panel({(float)WINDOW_WIDTH, 80.f});
     panel.setPosition({0.f, panelY});
     panel.setFillColor(sf::Color(20, 20, 20, 240));
     window.draw(panel);
@@ -828,7 +848,22 @@ static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& an
 }
 
 void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
-    sf::RenderWindow window(sf::VideoMode({WINDOW_WIDTH, WINDOW_HEIGHT}), toUtf8("Visualizador KD-Tree"));
+    // Abrir la ventana en modo fullscreen usando la resolución del escritorio
+    sf::VideoMode desktopMode = sf::VideoMode::getDesktopMode();
+    // SFML3 moved window styles; use sf::State::Fullscreen
+    sf::RenderWindow window(desktopMode, toUtf8("Visualizador KD-Tree"), sf::State::Fullscreen);
+
+    // Ajustar tamaños de layout para fullscreen: el plano ocupa la mitad izquierda
+    // Obtener tamaño real de la ventana creada (SFML3 compatible)
+    sf::Vector2u winSize = window.getSize();
+    WINDOW_WIDTH = static_cast<int>(winSize.x);
+    WINDOW_HEIGHT = static_cast<int>(winSize.y);
+    PLANE_WIDTH = static_cast<float>(WINDOW_WIDTH) / 2.f; // mitad izquierda
+    PLANE_HEIGHT = static_cast<float>(WINDOW_HEIGHT);     // ocupar toda la altura
+    PLANE_ORIGIN_X = 0.f;
+    PLANE_ORIGIN_Y = 0.f;
+    TREE_ORIGIN_X = PLANE_WIDTH;
+    TREE_WIDTH = static_cast<float>(WINDOW_WIDTH) - TREE_ORIGIN_X - TREE_PADDING_X;
 
     // Cargar fuente para labels si está disponible
     sf::Font labelFont;
@@ -883,7 +918,19 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
         textX->setFillColor(sf::Color::White); textY->setFillColor(sf::Color::White); textBtn->setFillColor(sf::Color::Black);
         textSearch->setFillColor(sf::Color::Black);
         textRange->setFillColor(sf::Color::Black);
+        // Demo button label
+        // se inicializa más abajo cuando se crea el botón
         labelX->setFillColor(sf::Color::White); labelY->setFillColor(sf::Color::White);
+    }
+
+    // Demo button (carga dataset sintético)
+    sf::RectangleShape buttonDemo({BUTTON_W, BUTTON_H});
+    buttonDemo.setPosition({buttonRange.getPosition().x + BUTTON_W + INPUT_MARGIN, PLANE_ORIGIN_Y + INPUT_MARGIN + INPUT_DOWN_OFFSET});
+    buttonDemo.setFillColor(sf::Color(140,160,220)); buttonDemo.setOutlineThickness(2.f); buttonDemo.setOutlineColor(sf::Color(100,120,180));
+    std::unique_ptr<sf::Text> textDemo;
+    if (fontPtr) {
+        textDemo = std::make_unique<sf::Text>(*fontPtr, toUtf8("Demo"), 14);
+        textDemo->setFillColor(sf::Color::Black);
     }
 
     // Nearest search result
@@ -895,6 +942,13 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
     
     // Estado de búsqueda por rango
     RangeSearchState rangeState;
+    
+    // Estado demo (hospital)
+    bool demoLoaded = false;
+    std::vector<float> puntosAge; // edad por punto, alineado con 'puntos'
+    std::vector<int> demoNeighbors; // indices de vecinos resaltados
+    int selectedIndex = -1;
+    int demoK = 5;
 
     while (window.isOpen()) {
         // Avance automático de animación
@@ -1065,9 +1119,34 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                                 animState.hasResult = true;
                                 
                                 std::cout << "Tiempo de ejecución nearest neighbor: " << animState.executionTimeMicros << " us\n";
-                            }
-                        } catch(...) { }
-                        activeX = activeY = false;
+                                    }
+                                } catch(...) { }
+                                activeX = activeY = false;
+                            } else if (buttonDemo.getGlobalBounds().contains(mpos)) {
+                                // Cargar dataset sintético (modo demo)
+                                try {
+                                    // Reducir a 25 puntos para que quepan en el visualizador
+                                    const int N = 25;
+                                    puntos.clear(); puntosAge.clear(); demoNeighbors.clear(); selectedIndex = -1;
+                                    // Reiniciar KDTree (nota: posibles fugas de memoria en demo, tolerable aquí)
+                                    tree = KDTree();
+                                    std::random_device rd; std::mt19937 gen(rd());
+                                    // Generar puntos repartidos uniformemente en todo el rango del plano
+                                    // dejar un pequeño margen interior (2% del MAX_COORD)
+                                    float margin = MAX_COORD * 0.02f;
+                                    std::uniform_real_distribution<float> distX(margin, MAX_COORD - margin);
+                                    std::uniform_real_distribution<float> distY(margin, MAX_COORD - margin);
+                                    std::uniform_real_distribution<float> distA(20.f, 90.f);
+                                    for (int i = 0; i < N; ++i) {
+                                        Punto2D p{distX(gen), distY(gen)};
+                                        puntos.push_back(p);
+                                        puntosAge.push_back(distA(gen));
+                                        tree.insert(p);
+                                    }
+                                    demoLoaded = true;
+                                    std::cout << "Demo cargado: " << N << " puntos\n";
+                                } catch(...){}
+                                activeX = activeY = false;
                     } else if (buttonRange.getGlobalBounds().contains(mpos)) {
                         // Activar/desactivar modo de búsqueda por rango
                         rangeState.modoActivo = !rangeState.modoActivo;
@@ -1092,10 +1171,60 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                                 rangeState.tieneResultado = false;
                                 rangeState.puntosEncontrados.clear();
                             } else {
-                                // Insertar punto por coordenadas
-                                float realX = (float)(mx - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
-                                float realY = (1.f - (float)(my - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
-                                Punto2D p{realX, realY}; tree.insert(p); puntos.push_back(p);
+                                // Si modo demo cargado: seleccionar punto cercano en vez de insertar
+                                if (demoLoaded && !puntos.empty()) {
+                                    float bestDist2 = 1e12f; int bestIdx = -1;
+                                    for (size_t i=0;i<puntos.size();++i) {
+                                        sf::Vector2f sp = mapToPlane(puntos[i]);
+                                        float dx = sp.x - mpos.x; float dy = sp.y - mpos.y;
+                                        float d2 = dx*dx + dy*dy;
+                                        if (d2 < bestDist2) { bestDist2 = d2; bestIdx = (int)i; }
+                                    }
+                                    const float PICK_RADIUS = 10.f;
+                                    if (bestIdx >= 0 && bestDist2 <= PICK_RADIUS*PICK_RADIUS) {
+                                        // Seleccionado paciente
+                                        selectedIndex = bestIdx;
+                                        Punto2D target = puntos[selectedIndex];
+
+                                        // Generar animación nearest
+                                        if (tree.getRoot() != nullptr) {
+                                            generateSearchAnimation(tree.getRoot(), target, animState);
+                                            animState.currentStepIndex = 0;
+                                            animState.stepClock.restart();
+                                            animState.paused = false;
+                                        }
+
+                                        // Medir nearest real
+                                        auto start = std::chrono::high_resolution_clock::now();
+                                        Punto2D nn = tree.nearest(target);
+                                        auto end = std::chrono::high_resolution_clock::now();
+                                        animState.executionTimeMicros = std::chrono::duration<double, std::micro>(end - start).count();
+                                        animState.foundNearest = nn; animState.hasResult = true;
+
+                                        // Calcular k vecinos por fuerza bruta (2D)
+                                        demoNeighbors.clear();
+                                        std::vector<std::pair<float,int>> tmp;
+                                        for (size_t i=0;i<puntos.size();++i) {
+                                            if ((int)i == selectedIndex) continue;
+                                            float dx = puntos[i].x - target.x; float dy = puntos[i].y - target.y;
+                                            tmp.push_back({dx*dx+dy*dy, (int)i});
+                                        }
+                                        std::sort(tmp.begin(), tmp.end());
+                                        for (int k=0;k<demoK && k<(int)tmp.size(); ++k) demoNeighbors.push_back(tmp[k].second);
+
+                                        std::cout << "Paciente seleccionado: idx=" << selectedIndex << ", tiempo nearest: " << animState.executionTimeMicros << " us\n";
+                                    } else {
+                                        // No cercano: insertar nuevo punto
+                                        float realX = (float)(mx - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
+                                        float realY = (1.f - (float)(my - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
+                                        Punto2D p{realX, realY}; tree.insert(p); puntos.push_back(p); puntosAge.push_back(45.f);
+                                    }
+                                } else {
+                                    // Insertar punto por coordenadas
+                                    float realX = (float)(mx - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
+                                    float realY = (1.f - (float)(my - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
+                                    Punto2D p{realX, realY}; tree.insert(p); puntos.push_back(p);
+                                }
                             }
                         }
                         activeX = activeY = false;
@@ -1178,13 +1307,56 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
             sf::FloatRect lbx = labelX->getLocalBounds(); sf::FloatRect lby = labelY->getLocalBounds();
             labelX->setPosition(sf::Vector2f(boxX.getPosition().x + (INPUT_W - lbx.size.x)/2.f, boxX.getPosition().y - 8.f));
             labelY->setPosition(sf::Vector2f(boxY.getPosition().x + (INPUT_W - lby.size.x)/2.f, boxY.getPosition().y - 8.f));
-            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch); window.draw(buttonRange);
+            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch); window.draw(buttonRange); window.draw(buttonDemo);
             window.draw(*labelX); window.draw(*labelY); window.draw(*textX); window.draw(*textY); window.draw(*textBtn); window.draw(*textSearch); window.draw(*textRange);
+            if (textDemo) {
+                // position the demo label centered in its button
+                sf::FloatRect tdd = textDemo->getLocalBounds();
+                textDemo->setPosition(sf::Vector2f(buttonDemo.getPosition().x + (BUTTON_W - tdd.size.x)/2.f, buttonDemo.getPosition().y + (BUTTON_H - tdd.size.y)/2.f));
+                window.draw(*textDemo);
+            }
         } else {
-            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch); window.draw(buttonRange);
+            window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch); window.draw(buttonRange); window.draw(buttonDemo);
         }
 
-        for (const auto& p : puntos) { drawPoint(window, p, sf::Color::Red); drawPointLabel(window, p, fontPtr); }
+        for (size_t i = 0; i < puntos.size(); ++i) {
+            const auto &p = puntos[i];
+            sf::Color col = sf::Color::Red;
+            float radius = 5.f;
+
+            if (demoLoaded && i < puntosAge.size()) {
+                col = mapAgeToColor(puntosAge[i]);
+                radius = mapAgeToRadius(puntosAge[i]);
+            }
+
+            // Highlight selected patient
+            if ((int)i == selectedIndex) {
+                col = sf::Color::Yellow;
+                radius += 4.f;
+            } else {
+                // Highlight neighbors
+                if (std::find(demoNeighbors.begin(), demoNeighbors.end(), (int)i) != demoNeighbors.end()) {
+                    // give them a green outline by drawing a slightly larger dark circle behind
+                    drawPoint(window, p, sf::Color(40, 120, 40), radius + 3.f);
+                }
+            }
+
+            drawPoint(window, p, col, radius);
+
+            // Draw label only for non-demo mode or for the selected demo point
+            if (!demoLoaded) {
+                drawPointLabel(window, p, fontPtr);
+            } else if ((int)i == selectedIndex && fontPtr) {
+                std::ostringstream ss;
+                ss << "Idx:" << i << " Age:" << (int)puntosAge[i] << " WBC:" << (int)p.x << " BP:" << (int)p.y;
+                sf::Text info(*fontPtr, ss.str());
+                info.setCharacterSize(14);
+                info.setFillColor(sf::Color::White);
+                sf::Vector2f pos = mapToPlane(p);
+                info.setPosition({pos.x + 10.f, pos.y - 18.f});
+                window.draw(info);
+            }
+        }
         
         // Dibujar rectángulo de búsqueda por rango
         if (rangeState.modoActivo || animState.type == AnimationType::RANGE_SEARCH) {

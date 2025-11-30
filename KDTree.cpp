@@ -5,7 +5,11 @@
 using namespace std;
 
 
-// Función recursiva para insertar un punto complejidad O(log n) en promedio
+// Función recursiva para insertar un punto
+// Complejidad:
+//  - Tiempo (promedio): O(log n) por inserción cuando el árbol está razonablemente balanceado.
+//  - Tiempo (peor caso): O(n) si el árbol está degenerado (p. ej. inserciones ordenadas).
+//  - Espacio adicional: O(h) por la recursión, donde h es la altura del árbol (O(log n) promedio).
 KDNode* KDTree::insertRec(KDNode* nodo, const Punto2D& punto, int nivel) {
     if (nodo == nullptr) {
         return new KDNode(punto, nivel);
@@ -29,6 +33,10 @@ KDNode* KDTree::insertRec(KDNode* nodo, const Punto2D& punto, int nivel) {
 }
 
 
+// Método público: inserta 'punto' en el KD-tree
+// Complejidad (método público):
+//  - Tiempo: O(log n) promedio, O(n) en el peor caso (misma complejidad que la recursión interna).
+//  - Observación: la operación modifica la estructura del árbol y no devuelve un valor.
 void KDTree::insert(const Punto2D& punto) {
     root = insertRec(root, punto, 0);
 }
@@ -38,6 +46,11 @@ KDNode* KDTree::getRoot() const {
 }
 
 // ============ VECINO MAS CERCANO: Implementacion fiel al pseudocodigo ============
+// Complejidad:
+//  - Tiempo (promedio): O(log n) por búsqueda cuando el árbol está razonablemente balanceado
+//    y la poda elimina gran parte de las ramas.
+//  - Tiempo (peor caso): O(n) si el árbol está degenerado o la poda no descarta ramas.
+//  - Espacio adicional: O(h) por la recursión (h = altura del árbol, O(log n) promedio).
 
 // Funcion auxiliar: distancia al cuadrado entre dos puntos
 static inline float distanciaCuadrado(const Punto2D& a, const Punto2D& b) {
@@ -114,6 +127,9 @@ static KDNode* vecinoMasCercano(KDNode* raiz, const Punto2D& objetivo, int profu
 }
 
 // Metodo publico: encuentra el punto mas cercano a 'objetivo' en el KD-tree
+// Complejidad (método público):
+//  - Tiempo: igual que la recursión interna; O(log n) promedio con poda efectiva, O(n) peor caso.
+//  - Nota: en la UI se mide y muestra el tiempo real de la operación para el usuario.
 Punto2D KDTree::nearest(const Punto2D& objetivo) const {
     if (!root) return {0.f, 0.f};
     
@@ -124,6 +140,12 @@ Punto2D KDTree::nearest(const Punto2D& objetivo) const {
 }
 
 // ============ BUSQUEDA POR RANGO: Busqueda dentro de un rectangulo ============
+// Complejidad:
+//  - Tiempo (esperado): O(sqrt(n) + k) para un KD-tree balanceado en 2D, donde k es el número
+//    de puntos reportados por la consulta (resultado).
+//  - Tiempo (peor caso): O(n) si el rectángulo cubre la mayor parte de los puntos o la poda no es
+//    efectiva.
+//  - Espacio adicional: O(h) por la recursión más O(k) para almacenar los resultados.
 
 // Funcion recursiva que explora el arbol buscando puntos dentro del rectangulo
 void KDTree::rangeSearchRec(KDNode* nodo,
