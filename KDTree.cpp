@@ -260,8 +260,10 @@ void KDTree::kNearestRec(KDNode* nodo, const Punto2D& objetivo, int profundidad,
     kNearestRec(ramaCercana, objetivo, profundidad + 1, k, pq);
 
     // Poda: explorar rama lejana solo si puede contener mejores candidatos
-    float distanciaPlano = diff * diff;
-    if (pq.size() < (size_t)k || distanciaPlano < pq.front().first) {
+    // Comparamos |q[axis] - node.point[axis]|² < distancia_máxima(H)²
+    // (usamos cuadrados para evitar sqrt, consistente con distanciaCuadrado)
+    float distanciaPlanoCuadrado = diff * diff;
+    if (pq.size() < (size_t)k || distanciaPlanoCuadrado < pq.front().first) {
         kNearestRec(ramaLejana, objetivo, profundidad + 1, k, pq);
     }
 }

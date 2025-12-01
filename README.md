@@ -127,7 +127,7 @@ Incluidos en `main.cpp`:
 - Test de k-NN con verificación de vecinos correctos
 - Validación de ordenamiento por distancia
 
-## Screenshots
+## Screenshots version inicial
 
 ### Demo Principal
 ![Demo Overview](Screenshot_2025-11-29_20_02_37.png)
@@ -141,7 +141,7 @@ Incluidos en `main.cpp`:
 ### Inserción Animada
 ![Insertion](Screenshot_2025-11-29_20_07_34.png)
 
-## Video de Pruebas
+## Video de Pruebas versión final
 
 Demostración completa del visualizador interactivo con todas las operaciones:
 

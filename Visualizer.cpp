@@ -789,6 +789,18 @@ static void drawTreeRec2(sf::RenderWindow& window, KDNode* node,
         text.setOrigin({tb.size.x/2.f, tb.size.y});
         text.setPosition({posNodo.x, posNodo.y - radio - 6.f});
         window.draw(text);
+        
+        // Etiqueta del eje de comparación
+        int eje = node->nivel % 2;
+        std::string ejeLabel = (eje == 0) ? "X" : "Y";
+        sf::Text ejeText(*font, ejeLabel);
+        ejeText.setCharacterSize(10);
+        ejeText.setFillColor((eje == 0) ? sf::Color(100, 255, 100) : sf::Color(255, 100, 255)); // Verde para X, Magenta para Y
+        ejeText.setStyle(sf::Text::Bold);
+        sf::FloatRect ejeBounds = ejeText.getLocalBounds();
+        ejeText.setOrigin({ejeBounds.size.x/2.f, 0.f});
+        ejeText.setPosition({posNodo.x, posNodo.y + radio + 4.f});
+        window.draw(ejeText);
     }
 
     if (node->izquierdo) drawTreeRec2(window, node->izquierdo, xpos, font, highlightNode, isPulse);
