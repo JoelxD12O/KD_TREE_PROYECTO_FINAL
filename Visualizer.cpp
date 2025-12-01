@@ -27,7 +27,9 @@ enum class AnimationType {
     NONE,
     INSERT,
     SEARCH,
-    RANGE_SEARCH
+    RANGE_SEARCH,
+    DELETE,
+    KNN
 };
 
 struct AnimationStep {
@@ -62,6 +64,15 @@ struct RangeSearchState {
     std::vector<Punto2D> puntosEncontrados;
     bool tieneResultado = false;
     Rectangulo rectangulo{0.f, 0.f, 0.f, 0.f};
+};
+
+//---------------------- Estado de k-NN ---------------------
+struct KNNState {
+    bool modoActivo = false;
+    int k = 3;  // Valor por defecto
+    std::vector<Punto2D> puntosEncontrados;
+    bool tieneResultado = false;
+    Punto2D puntoObjetivo{0.f, 0.f};
 };
 
 //---------------------- Configuración de SFML ---------------------_
@@ -405,6 +416,53 @@ static void generateRangeSearchAnimation(KDNode* root, const Rectangulo& rect,
     finalStep.targetPoint = {(rect.xmin + rect.xmax) / 2.f, (rect.ymin + rect.ymax) / 2.f};
     finalStep.isLeaf = false;
     finalStep.description = "COMPLETADO: Encontrados " + std::to_string(foundPoints.size()) + " puntos";
+    anim.steps.push_back(finalStep);
+}
+
+// Generar animación para eliminación (simulada, ya que la eliminación real modifica la estructura)
+// En este caso, simplemente mostraremos qué punto se va a eliminar
+static void generateDeleteAnimation(const Punto2D& target, AnimationState& anim) {
+    anim.type = AnimationType::DELETE;
+    anim.steps.clear();
+    anim.currentStepIndex = -1;
+    anim.stepDuration = 1.0f;
+    anim.autoAdvance = true;
+    anim.paused = false;
+    
+    AnimationStep step;
+    step.currentNode = nullptr;
+    step.targetPoint = target;
+    step.isLeaf = true; // Para resaltar
+    step.description = "ELIMINANDO punto (" + std::to_string((int)target.x) + ", " + std::to_string((int)target.y) + ")";
+    anim.steps.push_back(step);
+}
+
+// Generar animación para k-NN
+static void generateKNNAnimation(const Punto2D& target, int k, 
+                                 const std::vector<Punto2D>& results, 
+                                 AnimationState& anim) {
+    anim.type = AnimationType::KNN;
+    anim.steps.clear();
+    anim.currentStepIndex = -1;
+    anim.stepDuration = 0.8f;
+    anim.autoAdvance = true;
+    anim.paused = false;
+    
+    // Paso inicial
+    AnimationStep initStep;
+    initStep.currentNode = nullptr;
+    initStep.targetPoint = target;
+    initStep.isComparison = false;
+    initStep.description = "Buscando " + std::to_string(k) + " vecinos mas cercanos a (" + 
+                           std::to_string((int)target.x) + ", " + std::to_string((int)target.y) + ")";
+    anim.steps.push_back(initStep);
+    
+    // Paso final con resultados
+    AnimationStep finalStep;
+    finalStep.currentNode = nullptr;
+    finalStep.targetPoint = target;
+    finalStep.isLeaf = true;
+    finalStep.description = "Encontrados " + std::to_string(results.size()) + " vecinos!";
     anim.steps.push_back(finalStep);
 }
 
@@ -788,6 +846,9 @@ static void drawAnimationInfo(sf::RenderWindow& window, const AnimationState& an
     } else if (anim.type == AnimationType::RANGE_SEARCH) {
         title = toUtf8("ANIMACIÓN: BÚSQUEDA POR RANGO");
         complexity = "O(sqrt(n) + k) donde k = resultados";
+    } else if (anim.type == AnimationType::DELETE) {
+        title = toUtf8("ANIMACIÓN: ELIMINACIÓN");
+        complexity = "O(log n) promedio";
     }
     sf::Text titleText(*font, title, 16);
     titleText.setFillColor(sf::Color::Yellow);
@@ -933,6 +994,48 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
         textDemo->setFillColor(sf::Color::Black);
     }
 
+    // Botón k-NN
+    sf::RectangleShape buttonKNN({BUTTON_W, BUTTON_H});
+    buttonKNN.setPosition({buttonDemo.getPosition().x + BUTTON_W + INPUT_MARGIN, PLANE_ORIGIN_Y + INPUT_MARGIN + INPUT_DOWN_OFFSET});
+    buttonKNN.setFillColor(sf::Color(150, 50, 150)); 
+    buttonKNN.setOutlineThickness(2.f); 
+    buttonKNN.setOutlineColor(sf::Color(100, 30, 100));
+    
+    std::unique_ptr<sf::Text> textKNN;
+    if (fontPtr) {
+        textKNN = std::make_unique<sf::Text>(*fontPtr, toUtf8("k-NN"), 14);
+        textKNN->setFillColor(sf::Color::White);
+    }
+
+    // Input para k
+    std::string inputK = "3";
+    bool activeK = false;
+    const float INPUT_K_W = 40.f;
+    sf::RectangleShape boxK({INPUT_K_W, INPUT_H});
+    boxK.setPosition({buttonKNN.getPosition().x + BUTTON_W + 5.f, PLANE_ORIGIN_Y + INPUT_MARGIN + INPUT_DOWN_OFFSET});
+    boxK.setFillColor(sf::Color(50,50,50)); 
+    boxK.setOutlineThickness(2.f); 
+    boxK.setOutlineColor(sf::Color(100,100,100));
+    
+    std::unique_ptr<sf::Text> textInputK;
+    if (fontPtr) {
+        textInputK = std::make_unique<sf::Text>(*fontPtr, inputK, 14);
+        textInputK->setFillColor(sf::Color::White);
+    }
+
+    // Botón Eliminar
+    sf::RectangleShape buttonDelete({BUTTON_W, BUTTON_H});
+    buttonDelete.setPosition({boxK.getPosition().x + INPUT_K_W + INPUT_MARGIN, PLANE_ORIGIN_Y + INPUT_MARGIN + INPUT_DOWN_OFFSET});
+    buttonDelete.setFillColor(sf::Color(200, 50, 50));
+    buttonDelete.setOutlineThickness(2.f); 
+    buttonDelete.setOutlineColor(sf::Color(160, 40, 40));
+    
+    std::unique_ptr<sf::Text> textDelete;
+    if (fontPtr) {
+        textDelete = std::make_unique<sf::Text>(*fontPtr, toUtf8("Eliminar"), 14);
+        textDelete->setFillColor(sf::Color::White);
+    }
+
     // Nearest search result
     bool hasNearest = false;
     Punto2D nearestPoint{0.f,0.f};
@@ -942,6 +1045,12 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
     
     // Estado de búsqueda por rango
     RangeSearchState rangeState;
+    
+    // Estado k-NN
+    KNNState knnState;
+    
+    // Modo delete
+    bool deleteMode = false;
     
     // Estado demo (hospital)
     bool demoLoaded = false;
@@ -1037,9 +1146,11 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                     }
                     continue;
                 }
+                // Backspace handling
                 if (key->scancode == sf::Keyboard::Scancode::Backspace) {
                     if (activeX && !inputX.empty()) inputX.pop_back();
                     else if (activeY && !inputY.empty()) inputY.pop_back();
+                    else if (activeK && !inputK.empty()) inputK.pop_back();
                 }
                 if (key->scancode == sf::Keyboard::Scancode::Enter || key->scancode == sf::Keyboard::Scancode::NumpadEnter) {
                     try {
@@ -1061,38 +1172,75 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                     char c = static_cast<char>(code);
                     if (activeX) { if ((c>='0'&&c<='9')||c=='.'||c=='-') inputX.push_back(c); }
                     else if (activeY) { if ((c>='0'&&c<='9')||c=='.'||c=='-') inputY.push_back(c); }
+                    else if (activeK) { if (c>='0'&&c<='9') inputK.push_back(c); }  // Solo dígitos para k
                 }
             }
 
             if (const auto* mouse = event->getIf<sf::Event::MouseButtonPressed>()) {
                 if (mouse->button == sf::Mouse::Button::Left) {
                     sf::Vector2f mpos((float)mouse->position.x, (float)mouse->position.y);
-                    if (boxX.getGlobalBounds().contains(mpos)) { activeX=true; activeY=false; }
-                    else if (boxY.getGlobalBounds().contains(mpos)) { activeX=false; activeY=true; }
+                    if (boxX.getGlobalBounds().contains(mpos)) { activeX=true; activeY=false; activeK=false; }
+                    else if (boxY.getGlobalBounds().contains(mpos)) { activeX=false; activeY=true; activeK=false; }
                     else if (button.getGlobalBounds().contains(mpos)) {
+                        // Cambiar comportamiento según modo
                         try {
                             if (!inputX.empty() && !inputY.empty()) {
-                                float rx = std::stof(inputX); float ry = std::stof(inputY);
-                                Punto2D p{rx, ry};
+                                float x = std::stof(inputX);
+                                float y = std::stof(inputY);
+                                Punto2D p{x, y};
                                 
-                                // Iniciar animación de inserción si hay árbol
-                                if (tree.getRoot() != nullptr) {
-                                    generateInsertAnimation(tree.getRoot(), p, animState);
-                                    animState.currentStepIndex = 0;
-                                    animState.stepClock.restart();
-                                    animState.paused = false;
+                                if (deleteMode) {
+                                    // Método 2: Eliminar por coordenadas
+                                    bool found = false;
+                                    int foundIdx = -1;
+                                    for (size_t i = 0; i < puntos.size(); ++i) {
+                                        if (std::abs(puntos[i].x - p.x) < 0.01f && 
+                                            std::abs(puntos[i].y - p.y) < 0.01f) {
+                                            found = true;
+                                            foundIdx = i;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (found) {
+                                        // Eliminar
+                                        generateDeleteAnimation(p, animState);
+                                        animState.currentStepIndex = 0;
+                                        animState.stepClock.restart();
+                                        animState.paused = false;
+                                        
+                                        tree.remove(p);
+                                        puntos.erase(puntos.begin() + foundIdx);
+                                        if (demoLoaded && foundIdx < (int)puntosAge.size()) {
+                                            puntosAge.erase(puntosAge.begin() + foundIdx);
+                                        }
+                                        
+                                        inputX.clear(); inputY.clear();
+                                        std::cout << "Punto eliminado (coords): (" << p.x << ", " << p.y << ")\n";
+                                    } else {
+                                        std::cout << "Punto no encontrado: (" << p.x << ", " << p.y << ")\n";
+                                    }
+                                } else {
+                                    // Modo normal: Insertar
+                                    // Iniciar animación de inserción si hay árbol
+                                    if (tree.getRoot() != nullptr) {
+                                        generateInsertAnimation(tree.getRoot(), p, animState);
+                                        animState.currentStepIndex = 0;
+                                        animState.stepClock.restart();
+                                        animState.paused = false;
+                                    }
+                                    
+                                    // Medir tiempo de inserción
+                                    auto start = std::chrono::high_resolution_clock::now();
+                                    tree.insert(p); 
+                                    auto end = std::chrono::high_resolution_clock::now();
+                                    animState.executionTimeMicros = std::chrono::duration<double, std::micro>(end - start).count();
+                                    
+                                    puntos.push_back(p); 
+                                    inputX.clear(); inputY.clear();
+                                    
+                                    std::cout << "Tiempo de ejecución insert: " << animState.executionTimeMicros << " us\n";
                                 }
-                                
-                                // Medir tiempo de inserción
-                                auto start = std::chrono::high_resolution_clock::now();
-                                tree.insert(p); 
-                                auto end = std::chrono::high_resolution_clock::now();
-                                animState.executionTimeMicros = std::chrono::duration<double, std::micro>(end - start).count();
-                                
-                                puntos.push_back(p); 
-                                inputX.clear(); inputY.clear();
-                                
-                                std::cout << "Tiempo de ejecución insert: " << animState.executionTimeMicros << " us\n";
                             }
                         } catch(...){}
                         activeX = activeY = false;
@@ -1150,13 +1298,35 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                     } else if (buttonRange.getGlobalBounds().contains(mpos)) {
                         // Activar/desactivar modo de búsqueda por rango
                         rangeState.modoActivo = !rangeState.modoActivo;
+                        knnState.modoActivo = false;
+                        deleteMode = false;
                         if (!rangeState.modoActivo) {
                             // Limpiar estado al desactivar
                             rangeState.dibujando = false;
                             rangeState.tieneResultado = false;
                             rangeState.puntosEncontrados.clear();
                         }
+                        activeX = activeY = activeK = false;
+                    } else if (buttonKNN.getGlobalBounds().contains(mpos)) {
+                        // Activar/desactivar modo k-NN
+                        knnState.modoActivo = !knnState.modoActivo;
+                        rangeState.modoActivo = false;
+                        deleteMode = false;
+                        if (!knnState.modoActivo) {
+                            knnState.tieneResultado = false;
+                            knnState.puntosEncontrados.clear();
+                        }
+                        activeX = activeY = activeK = false;
+                    } else if (boxK.getGlobalBounds().contains(mpos)) {
+                        // Activar input de k
+                        activeK = true;
                         activeX = activeY = false;
+                    } else if (buttonDelete.getGlobalBounds().contains(mpos)) {
+                        // Activar/desactivar modo eliminar
+                        deleteMode = !deleteMode;
+                        rangeState.modoActivo = false;
+                        knnState.modoActivo = false;
+                        activeX = activeY = activeK = false;
                     } else {
                         // click in plane
                         int mx = mouse->position.x; int my = mouse->position.y;
@@ -1170,6 +1340,72 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
                                 rangeState.puntoFin = mpos;
                                 rangeState.tieneResultado = false;
                                 rangeState.puntosEncontrados.clear();
+                            } else if (knnState.modoActivo) {
+                                // Modo k-NN: buscar k vecinos más cercanos
+                                try {
+                                    int k = std::stoi(inputK);
+                                    if (k > 0 && tree.getRoot() != nullptr) {
+                                        float realX = (float)(mx - PLANE_ORIGIN_X) / PLANE_WIDTH * MAX_COORD;
+                                        float realY = (1.f - (float)(my - PLANE_ORIGIN_Y) / PLANE_HEIGHT) * MAX_COORD;
+                                        Punto2D target{realX, realY};
+                                        knnState.puntoObjetivo = target;
+                                        
+                                        // Ejecutar k-NN y medir tiempo
+                                        auto start = std::chrono::high_resolution_clock::now();
+                                        knnState.puntosEncontrados = tree.kNearest(target, k);
+                                        auto end = std::chrono::high_resolution_clock::now();
+                                        animState.executionTimeMicros = std::chrono::duration<double, std::micro>(end - start).count();
+                                        
+                                        // Generar animación
+                                        generateKNNAnimation(target, k, knnState.puntosEncontrados, animState);
+                                        animState.currentStepIndex = 0;
+                                        animState.stepClock.restart();
+                                        animState.paused = false;
+                                        knnState.tieneResultado = true;
+                                        
+                                        std::cout << "k-NN (k=" << k << ") ejecutado en " 
+                                                  << animState.executionTimeMicros << " us\n";
+                                        std::cout << "Encontrados: " << knnState.puntosEncontrados.size() << " vecinos\n";
+                                    }
+                                } catch(...) {
+                                    std::cout << "Error: k debe ser un número válido > 0\n";
+                                }
+                            } else if (deleteMode) {
+                                // Modo eliminar
+                                // Método 1: Click directo en punto
+                                if (inputX.empty() && inputY.empty()) {
+                                    // Buscar punto más cercano al click
+                                    if (!puntos.empty()) {
+                                        float bestDist2 = 1e12f;
+                                        int bestIdx = -1;
+                                        for (size_t i = 0; i < puntos.size(); ++i) {
+                                            sf::Vector2f sp = mapToPlane(puntos[i]);
+                                            float dx = sp.x - mpos.x;
+                                            float dy = sp.y - mpos.y;
+                                            float d2 = dx*dx + dy*dy;
+                                            if (d2 < bestDist2) { bestDist2 = d2; bestIdx = (int)i; }
+                                        }
+                                        const float PICK_RADIUS = 15.f;
+                                        if (bestIdx >= 0 && bestDist2 <= PICK_RADIUS*PICK_RADIUS) {
+                                            Punto2D pToDelete = puntos[bestIdx];
+                                            
+                                            // Generar animación
+                                            generateDeleteAnimation(pToDelete, animState);
+                                            animState.currentStepIndex = 0;
+                                            animState.stepClock.restart();
+                                            animState.paused = false;
+                                            
+                                            // Eliminar del árbol y del vector
+                                            tree.remove(pToDelete);
+                                            puntos.erase(puntos.begin() + bestIdx);
+                                            if (demoLoaded && bestIdx < (int)puntosAge.size()) {
+                                                puntosAge.erase(puntosAge.begin() + bestIdx);
+                                            }
+                                            
+                                            std::cout << "Punto eliminado (click): (" << pToDelete.x << ", " << pToDelete.y << ")\n";
+                                        }
+                                    }
+                                }
                             } else {
                                 // Si modo demo cargado: seleccionar punto cercano en vez de insertar
                                 if (demoLoaded && !puntos.empty()) {
@@ -1296,19 +1532,58 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
             sf::FloatRect trb = textRange->getLocalBounds();
             textRange->setPosition(sf::Vector2f(buttonRange.getPosition().x + (BUTTON_W - trb.size.x)/2.f, buttonRange.getPosition().y + (BUTTON_H - trb.size.y)/2.f));
             
-            // Cambiar color del botón Rango si está activo
+            // Posicionar texto de botones nuevos
+            sf::FloatRect tkb = textKNN->getLocalBounds();
+            textKNN->setPosition(sf::Vector2f(buttonKNN.getPosition().x + (BUTTON_W - tkb.size.x)/2.f, buttonKNN.getPosition().y + (BUTTON_H - tkb.size.y)/2.f));
+            
+            textInputK->setString(inputK);
+            sf::FloatRect tik = textInputK->getLocalBounds();
+            textInputK->setPosition(sf::Vector2f(boxK.getPosition().x + (INPUT_K_W - tik.size.x)/2.f, boxK.getPosition().y + (INPUT_H - tik.size.y)/2.f));
+            
+            sf::FloatRect tdb = textDelete->getLocalBounds();
+            textDelete->setPosition(sf::Vector2f(buttonDelete.getPosition().x + (BUTTON_W - tdb.size.x)/2.f, buttonDelete.getPosition().y + (BUTTON_H - tdb.size.y)/2.f));
+            
+            // Cambiar colores según modo activo
             if (rangeState.modoActivo) {
+                rangeState.modoActivo = true;
                 buttonRange.setFillColor(sf::Color(255, 150, 100));
             } else {
                 buttonRange.setFillColor(sf::Color(200, 100, 80));
+            }
+            
+            // Cambiar color k-NN si está activo
+            if (knnState.modoActivo) {
+                buttonKNN.setFillColor(sf::Color(200, 80, 200));
+            } else {
+                buttonKNN.setFillColor(sf::Color(150, 50, 150));
+            }
+            
+            // Cambiar color Delete si está activo
+            if (deleteMode) {
+                buttonDelete.setFillColor(sf::Color(255, 80, 80));
+                // Cambiar color de inputs para indicar modo delete
+                boxX.setFillColor(sf::Color(80, 30, 30));
+                boxY.setFillColor(sf::Color(80, 30, 30));
+                // Deshabilitar visualmente botón Añadir
+                button.setFillColor(sf::Color(50, 80, 50));
+            } else {
+                buttonDelete.setFillColor(sf::Color(200, 50, 50));
+                // Restaurar colores normales
+                boxX.setFillColor(sf::Color(50,50,50));
+                boxY.setFillColor(sf::Color(50,50,50));
+                button.setFillColor(sf::Color(80,160,80));
             }
             
             // center labels
             sf::FloatRect lbx = labelX->getLocalBounds(); sf::FloatRect lby = labelY->getLocalBounds();
             labelX->setPosition(sf::Vector2f(boxX.getPosition().x + (INPUT_W - lbx.size.x)/2.f, boxX.getPosition().y - 8.f));
             labelY->setPosition(sf::Vector2f(boxY.getPosition().x + (INPUT_W - lby.size.x)/2.f, boxY.getPosition().y - 8.f));
+            
+            // Draw all UI elements
             window.draw(boxX); window.draw(boxY); window.draw(button); window.draw(buttonSearch); window.draw(buttonRange); window.draw(buttonDemo);
+            window.draw(buttonKNN); window.draw(boxK); window.draw(buttonDelete);
             window.draw(*labelX); window.draw(*labelY); window.draw(*textX); window.draw(*textY); window.draw(*textBtn); window.draw(*textSearch); window.draw(*textRange);
+            window.draw(*textKNN); window.draw(*textInputK); window.draw(*textDelete);
             if (textDemo) {
                 // position the demo label centered in its button
                 sf::FloatRect tdd = textDemo->getLocalBounds();
@@ -1418,8 +1693,37 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
             }
         }
         
-        // Resaltar punto objetivo durante animación (solo para INSERT y SEARCH)
-        if ((animState.type == AnimationType::INSERT || animState.type == AnimationType::SEARCH) && 
+        // Dibujar resultados k-NN
+        if (knnState.tieneResultado || animState.type == AnimationType::KNN) {
+            // Dibujar punto objetivo (magenta)
+            sf::Vector2f targetPos = mapToPlane(knnState.puntoObjetivo);
+            float r = 7.f;
+            sf::CircleShape targetCircle(r);
+            targetCircle.setOrigin(sf::Vector2f(r, r));
+            targetCircle.setPosition(targetPos);
+            targetCircle.setFillColor(sf::Color(255, 100, 255)); // Magenta
+            targetCircle.setOutlineThickness(2.f);
+            targetCircle.setOutlineColor(sf::Color::White);
+            window.draw(targetCircle);
+            
+            // Dibujar vecinos encontrados (violeta)
+            for (const auto& p : knnState.puntosEncontrados) {
+                sf::Vector2f pos = mapToPlane(p);
+                float nr = 8.f;
+                sf::CircleShape c(nr);
+                c.setOrigin(sf::Vector2f(nr, nr));
+                c.setPosition(pos);
+                c.setFillColor(sf::Color(200, 80, 200)); // Violeta
+                c.setOutlineThickness(2.f);
+                c.setOutlineColor(sf::Color::White);
+                window.draw(c);
+            }
+        }
+        
+        // Resaltar punto objetivo durante animación (INSERT, SEARCH, DELETE)
+        if ((animState.type == AnimationType::INSERT || 
+             animState.type == AnimationType::SEARCH || 
+             animState.type == AnimationType::DELETE) && 
             animState.currentStepIndex >= 0 && animState.currentStepIndex < (int)animState.steps.size()) {
             const auto& step = animState.steps[animState.currentStepIndex];
             sf::Vector2f targetPos = mapToPlane(step.targetPoint);
@@ -1428,7 +1732,14 @@ void runVisualizer(KDTree& tree, std::vector<Punto2D>& puntos) {
             sf::CircleShape targetCircle(r);
             targetCircle.setOrigin(sf::Vector2f(r, r));
             targetCircle.setPosition(targetPos);
-            targetCircle.setFillColor(sf::Color(255, 100, 255)); // Magenta para target
+            
+            // Color según tipo de animación
+            if (animState.type == AnimationType::DELETE) {
+                targetCircle.setFillColor(sf::Color(255, 50, 50)); // Rojo para delete
+            } else {
+                targetCircle.setFillColor(sf::Color(255, 100, 255)); // Magenta para insert/search
+            }
+            
             targetCircle.setOutlineThickness(2.f);
             targetCircle.setOutlineColor(sf::Color::White);
             window.draw(targetCircle);

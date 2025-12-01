@@ -5,6 +5,12 @@
 struct Punto2D {
     float x;
     float y;
+    
+    // Operador de comparación necesario para std::pair en heap
+    bool operator<(const Punto2D& other) const {
+        if (x != other.x) return x < other.x;
+        return y < other.y;
+    }
 };
 
 // Rectangulo para busqueda por rango
@@ -39,6 +45,12 @@ public:
     // Busqueda por rango: devuelve todos los puntos dentro del rectangulo
     std::vector<Punto2D> rangeSearch(const Rectangulo& rectangulo) const;
 
+    // Eliminar un punto del arbol
+    void remove(const Punto2D& punto);
+
+    // Buscar los k vecinos mas cercanos
+    std::vector<Punto2D> kNearest(const Punto2D& objetivo, int k) const;
+
 private:
     KDNode* root;
 
@@ -49,4 +61,12 @@ private:
                         const Rectangulo& rectangulo,
                         int profundidad,
                         std::vector<Punto2D>& resultado) const;
+
+    // Funciones auxiliares para eliminar
+    KDNode* removeRec(KDNode* nodo, const Punto2D& punto, int profundidad);
+    KDNode* findMin(KDNode* nodo, int d, int profundidad);
+
+    // Funcion auxiliar para k-NN
+    void kNearestRec(KDNode* nodo, const Punto2D& objetivo, int profundidad, int k,
+                     std::vector<std::pair<float, Punto2D>>& pq) const;
 };
